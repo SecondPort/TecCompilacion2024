@@ -1,0 +1,46 @@
+@startuml TablaSimbolos
+
+skinparam ClassAttributeIconSize 0
+hide circle
+
+class TablaSimbolos {
+    - contextos : List<Contexto>
+    + addContexto()
+    + delContexto()
+    + buscarIdentificador(Identificador)
+    + buscarIdentificadorLocal(Identificador)
+    + addIdentificador(Identificador)
+}
+
+class Contexto {
+    - identificadores : Map<String, Identificador>
+}
+
+
+enum TipoDato <<enum>> {
+    + INT
+    + CHAR
+}
+
+class Identificador {
+    - nombre : String
+    - tipoDato : TipoDato
+    - inicializada : Boolean
+    - utilizada : Boolean
+}
+
+class Variable { }
+
+class Funcion {
+    - argumentos : List<TipoDato>
+}
+
+TablaSimbolos -right-> Contexto
+
+Contexto --> Identificador
+
+Identificador -> TipoDato
+Identificador <|-- Variable
+Identificador <|-- Funcion
+
+@enduml
