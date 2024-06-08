@@ -31,6 +31,7 @@ public class Escucha extends compiladoresBaseListener {
     private Integer errors = 0;
     private TablaSimbolos tabla = TablaSimbolos.getInstancia();
     private List<String> erroresAcumulados = new ArrayList<>();
+    // private List<String> erroresAcumulados1 = new ArrayList<>();
 
     @Override
     public void enterPrograma(final ProgramaContext ctx) {
@@ -71,31 +72,46 @@ public class Escucha extends compiladoresBaseListener {
     @Override
     public void exitDeclaracion(DeclaracionContext ctx) {
         super.exitDeclaracion(ctx);
-
+        boolean errorEncontrado = false;
+    
         String nombre = ctx.ID().getText();
-
-        if (tabla.contieneSimboloLocal(nombre) == false) {
+        // Validación semántica para evitar doble declaración
+        if (!tabla.contieneSimboloLocal(nombre)) {
             Variable nuevaVariable = new Variable();
-
-            String tipo = ctx.getChild(0).getText();
-
+            String tipo = ctx.getChild(0).getText();  // Obtención del tipo de la variable
+    
             nuevaVariable.setNombre(nombre);
             nuevaVariable.setTipoDato(tipo);
-            if (ctx.getChild(2).getText().isBlank()) {
-                nuevaVariable.setInicializado(false);
-            }
-            else {
-                nuevaVariable.setInicializado(true);
-            }
+            nuevaVariable.setInicializado(!ctx.getChild(2).getText().isBlank());
             nuevaVariable.setUsado(false);
-
+    
             tabla.addSimbolo(nombre, nuevaVariable);
+        } else {
+            erroresAcumulados.add("Error semantico: Doble declaracion del mismo identificador (Linea: " + ctx.getStart().getLine() + ")");
+            errorEncontrado = true;
         }
-        else {
-            System.out.println("Error semantico: Doble declaracion del mismo identificador (Linea: " + ctx.getStart().getLine() + ")");
+    
+        // Validación sintáctica del punto y coma al final de la declaración
+        Token lastToken = ctx.getStop();
+        if (lastToken == null || !lastToken.getText().equals(";")) {
+            erroresAcumulados.add("Error sintáctico: se esperaba ';' al final de la declaración (Línea: " + ctx.getStop().getLine() + ")");
+            errorEncontrado = true;
+        }
+    
+        // Incrementamos el contador de errores solo si se encontró alguno.
+        if (errorEncontrado) {
             errors++;
         }
+    
+        // Imprimir todos los errores acumulados al final de la ejecución o aquí mismo.
+        if (!erroresAcumulados.isEmpty()) {
+            for (String error : erroresAcumulados) {
+                System.out.println(error);
+            }
+            erroresAcumulados.clear();  // Limpiar la lista después de imprimir los errores.
+        }
     }
+    
 
     @Override
     public void exitPrototipofunc(PrototipofuncContext ctx) {
