@@ -146,16 +146,39 @@ public class Escucha extends compiladoresBaseListener {
     @Override
     public void exitAsignacion(AsignacionContext ctx) {
         super.exitAsignacion(ctx);
+        boolean errorEncontrado = false;
+
+        // Primero realizamos la validación semántica de la asignación.
         if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
-                System.out.println("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
-                errors++;             
+                erroresAcumulados.add("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
+                errorEncontrado = true;           
             }
-            else if (simbolo != null && simbolo.getInicializado() == false) {
-                System.out.println("Error semantico: Uso de un identificador no inicializado (Linea: " + ctx.getStart().getLine() + ")");
-                errors++;
+            else if (!simbolo.getInicializado()) {
+                erroresAcumulados.add("Error semantico: Uso de un identificador no inicializado (Linea: " + ctx.getStart().getLine() + ")");
+                errorEncontrado = true;
             }
+        }
+
+        // Luego verificamos la correcta terminación sintáctica con un punto y coma.
+        Token lastToken = ctx.getStop();
+        if (lastToken == null || !lastToken.getText().equals(";")) {
+            erroresAcumulados.add("Error sintáctico: se esperaba ';' al final de la asignación (Línea: " + ctx.getStop().getLine() + ")");
+            errorEncontrado = true;
+        }
+
+        // Incrementamos el contador de errores solo si se encontró alguno.
+        if (errorEncontrado) {
+            errors++;
+        }
+
+        // Imprimir todos los errores acumulados al final de la ejecución o aquí mismo.
+        if (!erroresAcumulados.isEmpty()) {
+            for (String error : erroresAcumulados) {
+                System.out.println(error);
+            }
+            erroresAcumulados.clear();  // Limpiar la lista después de imprimir los errores.
         }
     }
 
