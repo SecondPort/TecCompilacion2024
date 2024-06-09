@@ -19,12 +19,7 @@ import compiladores.compiladoresParser.ListafactfuncContext;
 import compiladores.compiladoresParser.LlamadafuncContext;
 import compiladores.compiladoresParser.ProgramaContext;
 import compiladores.compiladoresParser.PrototipofuncContext;
-/**
- * This class is a listener that extends the `compiladoresBaseListener` class.
- * It is responsible for listening to events during the parsing process and performing semantic analysis.
- * It keeps track of the number of nodes, tokens, and errors encountered during the compilation process.
- * It also manages a symbol table for variable and function declarations.
- */
+
 public class Escucha extends compiladoresBaseListener {
     private Integer nodos = 0;
     private Integer tokens = 0;
