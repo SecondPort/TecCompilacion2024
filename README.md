@@ -69,7 +69,7 @@ public void exitRuleName(RuleContext ctx) {
 ### Directrices para Extensión de Gramática
 - **Tokens terminales**: Definir en MAYÚSCULAS (ej., `INT`, `WHILE`, `PYC`)
 - **Reglas**: Definir en minúsculas (ej., `programa`, `declaracion`, `expresion`)
-- **Fragmentos**: Usar solo para clases de caracteres (ej., `fragment LETRA : [A-Za-z];`)
+- **Fragmentos**: Usar solo para clases de caracteres (ej., `fragment LETRA  [A-Za-z];`)
 - La generación de Parser/Visitor está habilitada en `pom.xml` - ambos patrones están disponibles pero Listener es el primario
 
 ## Pruebas
