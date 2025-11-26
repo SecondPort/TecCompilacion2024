@@ -89,5 +89,10 @@ public class App {
         // Fase 8: Imprimir la representación textual del árbol sintáctico generado
         System.out.println(tree.toStringTree(parser));
         
+        // Fase 9: Generación de código ensamblador
+        System.out.println("\n--- Iniciando generación de código ensamblador ---");
+        GeneradorAssembler generador = new GeneradorAssembler("salida/programa.asm");
+        generador.visit(tree);
+        
     }
 }

@@ -1,7 +1,7 @@
 # TecCompilacion2024
 
 ## Descripción General del Proyecto
-Este es un proyecto de compilador construido con **ANTLR4** (v4.13.1) y **Java 17**. El compilador realiza análisis léxico, sintáctico y semántico sobre un lenguaje similar a C.
+Este es un proyecto de compilador construido con **ANTLR4** (v4.13.1) y **Java 17**. El compilador realiza análisis léxico, sintáctico, semántico y **generación de código ensamblador** sobre un lenguaje similar a C.
 
 ## Arquitectura
 
@@ -10,6 +10,7 @@ Este es un proyecto de compilador construido con **ANTLR4** (v4.13.1) y **Java 1
 - **Código Generado**: `target/generated-sources/antlr4/` - Clases auto-generadas de parser/lexer (NO editar manualmente)
 - **Patrón Listener**: `Escucha.java` extiende `compiladoresBaseListener` para análisis semántico durante el recorrido del árbol de parseo
 - **Patrón Visitor**: `Caminante.java` extiende `compiladoresBaseVisitor` para recorrido alternativo del árbol (actualmente usado para contar asignaciones)
+- **Generador de Código**: `GeneradorAssembler.java` extiende `compiladoresBaseVisitor` para generar código ensamblador NASM (x86)
 - **Tabla de Símbolos**: `TablaSimbolos.java` - Singleton que gestiona tablas de símbolos con ámbitos usando una pila de contextos
 
 ### Flujo de Datos
@@ -18,6 +19,7 @@ Este es un proyecto de compilador construido con **ANTLR4** (v4.13.1) y **Java 1
 3. `compiladoresParser` construye el árbol de parseo usando las reglas de gramática
 4. El listener `Escucha` recorre el árbol, realizando chequeos semánticos y poblando la tabla de símbolos
 5. Los mensajes de error se imprimen en stdout durante el recorrido
+6. El visitor `GeneradorAssembler` recorre el árbol y genera código ensamblador NASM (`salida/programa.asm`)
 
 ## Flujos de Trabajo Críticos
 
@@ -84,8 +86,75 @@ Los archivos de prueba de entrada están en el directorio `entrada/`. El archivo
 - **Inicialización de variables**: Rastrear mediante `setInicializado()` en la declaración, chequear antes de usar
 - La ruta del archivo de entrada está hardcodeada - actualizar `App.java` para archivos de prueba diferentes
 
+## Generación de Código Ensamblador
+
+### Arquitectura de Generación
+El generador produce código ensamblador en sintaxis **NASM para x86** (32 bits) con las siguientes características:
+- **Variables**: Se almacenan en la sección `.bss` (datos no inicializados)
+- **Expresiones**: Se evalúan usando registros `EAX`, `EBX` como acumuladores y la pila para operandos temporales
+- **Estructuras de control**: Se implementan con etiquetas y saltos condicionales (`je`, `jne`, `jmp`, etc.)
+- **Operaciones soportadas**: 
+  - Aritméticas: suma, resta, multiplicación, división, módulo
+  - Comparaciones: `==`, `!=`, `>`, `<`
+  - Control de flujo: `if-else`, `while`, `for`
+
+### Ejemplo de Traducción
+```c
+// Código fuente
+int x = 5;
+int y = 10;
+int z;
+z = x + y * 2;
+```
+
+```nasm
+; Código ensamblador generado
+section .bss
+    x: resd 1  ; int
+    y: resd 1  ; int
+    z: resd 1  ; int
+
+section .text
+_start:
+    ; Inicialización de x
+    mov dword [x], 5
+    ; Inicialización de y
+    mov dword [y], 10
+
+    ; Asignación a z
+    mov eax, [x]
+    push eax
+    mov eax, [y]
+    push eax
+    mov eax, 2
+    mov ebx, eax
+    pop eax
+    imul eax, ebx  ; multiplicación
+    mov ebx, eax
+    pop eax
+    add eax, ebx  ; suma
+    mov [z], eax
+```
+
+### Archivo de Salida
+El código ensamblador generado se guarda en: `salida/programa.asm`
+
+### Ensamblar y Ejecutar (Linux)
+```bash
+# Ensamblar con NASM
+nasm -f elf32 salida/programa.asm -o salida/programa.o
+
+# Enlazar
+ld -m elf_i386 salida/programa.o -o salida/programa
+
+# Ejecutar
+./salida/programa
+```
+
 ## Archivos Clave para Referencia
 - Reglas de gramática: `src/main/antlr4/compiladores/compiladores.g4`
 - Análisis semántico: `src/main/java/compiladores/Escucha.java`
+- Generación de código: `src/main/java/compiladores/GeneradorAssembler.java`
 - Estructura de tabla de símbolos: `src/main/java/compiladores/TablaSimbolos.java`
 - Entrada de prueba: `entrada/programa.txt`
+- Salida de ensamblador: `salida/programa.asm`
