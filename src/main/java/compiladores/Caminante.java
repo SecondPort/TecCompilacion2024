@@ -24,7 +24,6 @@ import compiladores.compiladoresParser.ProgramaContext;
  *   <li>Contar y reportar asignaciones encontradas</li>
  *   <li>Mostrar información estructural del árbol (número de hijos)</li>
  * </ul>
- * </p>
  *
  * @author Compiladores 2024
  * @version 1.0

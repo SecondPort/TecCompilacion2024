@@ -16,7 +16,6 @@ import org.antlr.v4.runtime.CommonTokenStream;
  *   <li><b>Análisis Semántico:</b> Conexión del listener para validaciones semánticas</li>
  *   <li><b>Generación del Árbol:</b> Construcción del árbol sintáctico (parse tree)</li>
  * </ol>
- * </p>
  * <p>
  * El flujo de compilación sigue el patrón de diseño <b>Pipeline</b>, donde cada
  * fase procesa la salida de la fase anterior:
@@ -45,7 +44,6 @@ public class App {
      *   <li>Inicia el parsing desde la regla {@code programa}</li>
      *   <li>Imprime la representación textual del árbol sintáctico</li>
      * </ol>
-     * </p>
      * <p>
      * El método incluye código comentado que demuestra cómo integrar el
      * patrón Visitor ({@link Caminante}) para recorridos alternativos del árbol.

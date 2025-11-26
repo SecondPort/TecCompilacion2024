@@ -36,7 +36,6 @@ import compiladores.compiladoresParser.PrototipofuncContext;
  *   <li>Detección de errores sintácticos (falta de punto y coma, llaves, etc.)</li>
  *   <li>Conteo de nodos, tokens y errores durante el parsing</li>
  * </ul>
- * </p>
  *
  * @author Compiladores 2024
  * @version 1.0
@@ -158,7 +157,6 @@ public class Escucha extends compiladoresBaseListener {
      *       (evita doble declaración)</li>
      *   <li><b>Sintáctica:</b> Verifica que la declaración termine con punto y coma ';'</li>
      * </ul>
-     * </p>
      * <p>
      * Si la variable es válida, crea un objeto {@link Variable} con su información
      * (nombre, tipo, inicialización) y lo añade a la tabla de símbolos.
@@ -294,7 +292,6 @@ public class Escucha extends compiladoresBaseListener {
      *   <li><b>Semántica:</b> Verifica que la variable esté inicializada antes de su uso</li>
      *   <li><b>Sintáctica:</b> Verifica que la asignación termine con punto y coma ';'</li>
      * </ul>
-     * </p>
      * <p>
      * Los errores se acumulan en una lista temporal y se imprimen en conjunto
      * al final del método para mantener la salida organizada.
@@ -350,7 +347,6 @@ public class Escucha extends compiladoresBaseListener {
      *   <li>El identificador esté declarado previamente</li>
      *   <li>El identificador esté inicializado antes de su uso</li>
      * </ul>
-     * </p>
      *
      * @param ctx el contexto del nodo {@code factor} del árbol sintáctico
      */
@@ -403,7 +399,6 @@ public class Escucha extends compiladoresBaseListener {
      *   <li>Declarado previamente en algún contexto visible</li>
      *   <li>Inicializado antes de su uso</li>
      * </ul>
-     * </p>
      *
      * @param ctx el contexto del nodo {@code factorfunc} del árbol sintáctico
      */
@@ -431,7 +426,6 @@ public class Escucha extends compiladoresBaseListener {
      *   <li>Declarado previamente</li>
      *   <li>Inicializado antes de ser pasado como argumento</li>
      * </ul>
-     * </p>
      *
      * @param ctx el contexto del nodo {@code listafactfunc} del árbol sintáctico
      */
@@ -459,7 +453,6 @@ public class Escucha extends compiladoresBaseListener {
      *   <li>Declarada previamente (como prototipo o definición completa)</li>
      *   <li>Inicializada (en el caso de variables de tipo función o punteros a función)</li>
      * </ul>
-     * </p>
      *
      * @param ctx el contexto del nodo {@code llamadafunc} del árbol sintáctico
      */
