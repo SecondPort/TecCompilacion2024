@@ -416,5 +416,6 @@ enum TipoDato {
     /**
      * Tipo punto flotante de doble precisión (64 bits).
      */
-    DOUBLE
+    DOUBLE,
+    CHAR
 }

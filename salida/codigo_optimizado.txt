@@ -1,0 +1,22 @@
+l0:
+t0 = i < 10
+if t0 goto l1
+goto l2
+l1:
+t1 = i == 3
+if t1 goto l3
+goto l4
+l3:
+goto l0
+l4:
+t2 = i == 7
+if t2 goto l5
+goto l6
+l5:
+goto l2
+l6:
+t3 = suma + i
+suma = t3
+i = i + 1
+goto l0
+l2:

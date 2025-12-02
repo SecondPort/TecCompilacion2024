@@ -9,6 +9,8 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
     private List<Instruccion> instrucciones = new ArrayList<>();
     private int tempCounter = 0;
     private int labelCounter = 0;
+    private List<String> breakLabels = new ArrayList<>();
+    private List<String> continueLabels = new ArrayList<>();
 
     public List<Instruccion> getInstrucciones() {
         return instrucciones;
@@ -74,6 +76,7 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
     @Override
     public String visitFactor(FactorContext ctx) {
         if (ctx.NUMERO() != null) return ctx.NUMERO().getText();
+        if (ctx.CHAR_CONST() != null) return ctx.CHAR_CONST().getText();
         if (ctx.ID() != null) return ctx.ID().getText();
         if (ctx.expresion() != null) return visit(ctx.expresion());
         return "";
@@ -112,19 +115,25 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
         String labelStart = newLabel();
         String labelTrue = newLabel();
         String labelEnd = newLabel();
-        
+
+        breakLabels.add(labelEnd);
+        continueLabels.add(labelStart);
+
         instrucciones.add(new Instruccion("label", null, null, labelStart));
         String cond = visit(ctx.condicion());
-        
+
         instrucciones.add(new Instruccion("if", cond, null, labelTrue));
         instrucciones.add(new Instruccion("goto", null, null, labelEnd));
-        
+
         instrucciones.add(new Instruccion("label", null, null, labelTrue));
         visit(ctx.bloque());
         instrucciones.add(new Instruccion("goto", null, null, labelStart));
-        
+
         instrucciones.add(new Instruccion("label", null, null, labelEnd));
-        
+
+        breakLabels.remove(breakLabels.size() - 1);
+        continueLabels.remove(continueLabels.size() - 1);
+
         return null;
     }
 
@@ -140,27 +149,51 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
         
         CicloContext ciclo = ctx.ciclo();
         visit(ciclo.declaracion()); // Init
-        
+
         String labelStart = newLabel();
         String labelTrue = newLabel();
         String labelEnd = newLabel();
-        
+
+        breakLabels.add(labelEnd);
+        continueLabels.add(labelStart);
+
         instrucciones.add(new Instruccion("label", null, null, labelStart));
-        
+
         // Condición (comparacion)
         // comparacion returns a temp
         String cond = visit(ciclo.comparacion());
-        
+
         instrucciones.add(new Instruccion("if", cond, null, labelTrue));
         instrucciones.add(new Instruccion("goto", null, null, labelEnd));
-        
+
         instrucciones.add(new Instruccion("label", null, null, labelTrue));
         visit(ctx.bloque());
         visit(ciclo.finfor()); // Update
         instrucciones.add(new Instruccion("goto", null, null, labelStart));
-        
+
         instrucciones.add(new Instruccion("label", null, null, labelEnd));
-        
+
+        breakLabels.remove(breakLabels.size() - 1);
+        continueLabels.remove(continueLabels.size() - 1);
+
+        return null;
+    }
+
+    @Override
+    public String visitIbreak(IbreakContext ctx) {
+        if (!breakLabels.isEmpty()) {
+            String destino = breakLabels.get(breakLabels.size() - 1);
+            instrucciones.add(new Instruccion("goto", null, null, destino));
+        }
+        return null;
+    }
+
+    @Override
+    public String visitIcontinue(IcontinueContext ctx) {
+        if (!continueLabels.isEmpty()) {
+            String destino = continueLabels.get(continueLabels.size() - 1);
+            instrucciones.add(new Instruccion("goto", null, null, destino));
+        }
         return null;
     }
     

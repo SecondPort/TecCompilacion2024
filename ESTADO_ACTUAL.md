@@ -211,12 +211,13 @@ La descripción se organiza por secciones del enunciado.
 	- `visitComparacion` genera instrucciones como `tX = left < right`, `tX = left == right`, etc.
 	- `visitCondicion` y `processListaComp` generan código con operadores lógicos `&&`, `||` combinando resultados de comparaciones.
 
-- ✅ **Estructuras de control: if, while, for**
+- ✅ **Estructuras de control: if, while, for, break, continue**
 	- `visitIif` genera:
 		- Un temporal para condición.
 		- Instrucciones `if cond goto Ltrue`, `goto Lfalse`, `label Ltrue`, `...`, y manejo opcional de `else` con salto final a `Lend`.
-	- `visitIwhile` genera bucles con etiquetas `labelStart`, `labelTrue`, `labelEnd` y saltos condicionales.
-	- `visitIfor` descompone el `for` en inicialización (`declaracion`), condición (`comparacion`), actualización (`finfor`), y cuerpo (`bloque`), generando código intermedio equivalente.
+	- `visitIwhile` genera bucles con etiquetas `labelStart`, `labelTrue`, `labelEnd` y saltos condicionales. Ahora mantiene pilas de etiquetas de bucle para soportar `break` y `continue` anidados.
+	- `visitIfor` descompone el `for` en inicialización (`declaracion`), condición (`comparacion`), actualización (`finfor`), y cuerpo (`bloque`), generando código intermedio equivalente. También registra etiquetas de inicio y fin de bucle para `break`/`continue`.
+	- `visitIbreak` y `visitIcontinue` emiten instrucciones `goto` hacia la etiqueta de fin de bucle actual (`break`) o de inicio/continuación (`continue`), usando pilas para manejar bucles anidados.
 	- `visitFinfor` maneja `i++`, `i--` y expresiones de actualización generales.
 
 - ⚠️ **Llamadas a funciones y retorno de valores (en tres direcciones)**
@@ -349,30 +350,29 @@ Con las técnicas ya implementadas (propagación de constantes, constant folding
 
 **Estado actual de la gramática y semántica:**
 
-- ✅ **Tipos `int`, `double`, `void` (para funciones)**
-	- La gramática define tokens `INT`, `DOUBLE`, `VOID`.
+- ✅ **Tipos `int`, `double`, `char`, `void` (para funciones)**
+	- La gramática define tokens `INT`, `DOUBLE`, `CHAR`, `VOID`.
 	- Se usan en reglas `tipo` y `tipofunc`.
-	- Falta soporte explícito de `char` en la gramática actual.
-
-- ⚠️ **Tipo `char`**
-	- No hay token ni regla para constantes tipo `char` (ej: `'a'`).
-	- El enum `TipoDato` tampoco tiene `CHAR`.
+	- El enum `TipoDato` en `TablaSimbolos` ahora incluye `CHAR`.
+	- Se admiten literales de carácter mediante `CHAR_CONST` (por ejemplo `'a'`).
 
 - ✅ **Estructuras de control `if-else`, `for`, `while`**
 	- Gramática tiene reglas `iif`, `ielse`, `iwhile`, `ifor`, `ciclo`, `finfor`.
 	- `GeneradorCodigoIntermedio` y `GeneradorAssembler` implementan traducción de estas estructuras.
 
-- ⚠️ **Sentencias `break` y `continue`**
-	- La gramática no define tokens ni reglas para `break` o `continue`.
-	- En consecuencia, no hay soporte semántico ni de generación de código para estas sentencias.
+- ✅ **Sentencias `break` y `continue`**
+	- La gramática define tokens y reglas `ibreak` e `icontinue` para `break;` y `continue;`.
+	- El generador de código intermedio mantiene pilas de etiquetas por bucle y traduce `break`/`continue` a saltos hacia la etiqueta de fin o de inicio del bucle actual.
+	- El generador de ensamblador hace lo mismo a nivel NASM, generando instrucciones `jmp` a las etiquetas correctas para `while` y `for`.
 
 - ✅ **Declaración de variables y funciones**
 	- Soportadas en gramática y en la tabla de símbolos.
 	- Generación de código para variables `int`/`double` está resuelta en `GeneradorAssembler`.
 
-- ✅/⚠️ **Expresiones aritméticas y lógicas**
+- ✅/⚠️ **Expresiones aritméticas y lógicas (incluyendo `char`)**
 	- Gramática soporta `+ - * / %`, comparaciones `== != > <`, operadores lógicos `&& ||`.
 	- Código intermedio y ensamblador cubren las operaciones aritméticas y comparaciones básicas.
+	- Los literales `char` se manejan como enteros (códigos ASCII) tanto en código intermedio (como lexema de `CHAR_CONST`) como en ensamblador (carga del ASCII en `EAX` y almacenamiento en variables `char`).
 	- La semántica de corto circuito para `&&`/`||` no está claramente implementada en generación de ensamblador (se hace a nivel de tres direcciones).
 
 - ⚠️ **Llamadas a funciones y retorno de valores**

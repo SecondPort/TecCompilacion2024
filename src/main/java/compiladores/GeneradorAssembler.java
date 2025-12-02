@@ -82,6 +82,9 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
      */
     private Set<String> variablesDeclaradas;
 
+    private java.util.Deque<String> pilaBreak = new java.util.ArrayDeque<>();
+    private java.util.Deque<String> pilaContinue = new java.util.ArrayDeque<>();
+
     /**
      * Constructor que inicializa el generador de código ensamblador.
      * <p>
@@ -191,19 +194,31 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         String tipo = ctx.tipo().getText();
         
         // Reservar espacio en la sección de datos solo si no ha sido declarada antes
-        if ((tipo.equals("int") || tipo.equals("double")) && !variablesDeclaradas.contains(nombre)) {
-            seccionDatos.append("    ").append(nombre).append(": resd 1  ; ")
-                       .append(tipo).append("\n");
+        if (!variablesDeclaradas.contains(nombre)) {
+            if ("char".equals(tipo)) {
+                seccionDatos.append("    ").append(nombre).append(": resb 1  ; char\n");
+            } else {
+                seccionDatos.append("    ").append(nombre).append(": resd 1  ; ")
+                           .append(tipo).append("\n");
+            }
             offsetsVariables.put(nombre, offsetActual);
             offsetActual += 4; // 4 bytes por variable
             variablesDeclaradas.add(nombre);
         }
         
         // Si tiene inicialización, generar código de asignación
-        if (ctx.inicializacion() != null && ctx.inicializacion().NUMERO() != null) {
-            String valor = ctx.inicializacion().NUMERO().getText();
-            codigo.append("    ; Inicialización de ").append(nombre).append("\n");
-            codigo.append("    mov dword [").append(nombre).append("], ").append(valor).append("\n");
+        if (ctx.inicializacion() != null) {
+            if (ctx.inicializacion().NUMERO() != null) {
+                String valor = ctx.inicializacion().NUMERO().getText();
+                codigo.append("    ; Inicialización de ").append(nombre).append("\n");
+                codigo.append("    mov dword [").append(nombre).append("], ").append(valor).append("\n");
+            } else if (ctx.inicializacion().CHAR_CONST() != null) {
+                String lexema = ctx.inicializacion().CHAR_CONST().getText();
+                char c = lexema.charAt(1);
+                int ascii = (int) c;
+                codigo.append("    ; Inicialización de ").append(nombre).append(" (char)\n");
+                codigo.append("    mov byte [").append(nombre).append("], ").append(ascii).append("\n");
+            }
         }
         
         return super.visitDeclaracion(ctx);
@@ -388,10 +403,15 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
             // Cargar número literal en EAX
             String numero = ctx.NUMERO().getText();
             codigo.append("    mov eax, ").append(numero).append("\n");
+        } else if (ctx.CHAR_CONST() != null) {
+            String lexema = ctx.CHAR_CONST().getText();
+            char c = lexema.charAt(1);
+            int ascii = (int) c;
+            codigo.append("    mov eax, ").append(ascii).append("\n");
         } else if (ctx.ID() != null) {
             // Cargar valor de variable en EAX
             String variable = ctx.ID().getText();
-            codigo.append("    mov eax, [").append(variable).append("]\n");
+            codigo.append("    movsx eax, byte [").append(variable).append("]\n");
         } else if (ctx.expresion() != null) {
             // Expresión entre paréntesis
             visitExpresion(ctx.expresion());
@@ -481,23 +501,29 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
     public String visitIwhile(IwhileContext ctx) {
         String etiquetaInicio = generarEtiqueta();
         String etiquetaFin = generarEtiqueta();
-        
+
+        pilaContinue.push(etiquetaInicio);
+        pilaBreak.push(etiquetaFin);
+
         codigo.append("\n    ; Estructura WHILE\n");
         codigo.append(etiquetaInicio).append(":\n");
-        
+
         // Evaluar condición
         visitCondicion(ctx.condicion());
-        
+
         // Saltar al final si la condición es falsa
         codigo.append("    je ").append(etiquetaFin).append("  ; salir si falso\n");
-        
+
         // Cuerpo del while
         visitBloque(ctx.bloque());
-        
+
         // Volver al inicio del bucle
         codigo.append("    jmp ").append(etiquetaInicio).append("  ; repetir bucle\n");
         codigo.append(etiquetaFin).append(":\n");
-        
+
+        pilaBreak.pop();
+        pilaContinue.pop();
+
         return "";
     }
 
@@ -530,7 +556,10 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
     public String visitIfor(IforContext ctx) {
         String etiquetaInicio = generarEtiqueta();
         String etiquetaFin = generarEtiqueta();
-        
+
+        pilaContinue.push(etiquetaInicio);
+        pilaBreak.push(etiquetaFin);
+
         codigo.append("\n    ; Estructura FOR\n");
         
         // Obtener el contexto del ciclo: PA declaracion comparacion PYC finfor PC
@@ -563,7 +592,30 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         // 7. Volver al inicio del bucle
         codigo.append("    jmp ").append(etiquetaInicio).append("  ; repetir bucle\n");
         codigo.append(etiquetaFin).append(":\n");
-        
+
+        pilaBreak.pop();
+        pilaContinue.pop();
+
+        return "";
+    }
+
+    @Override
+    public String visitIbreak(IbreakContext ctx) {
+        if (!pilaBreak.isEmpty()) {
+            String destino = pilaBreak.peek();
+            codigo.append("    ; break\n");
+            codigo.append("    jmp ").append(destino).append("\n");
+        }
+        return "";
+    }
+
+    @Override
+    public String visitIcontinue(IcontinueContext ctx) {
+        if (!pilaContinue.isEmpty()) {
+            String destino = pilaContinue.peek();
+            codigo.append("    ; continue\n");
+            codigo.append("    jmp ").append(destino).append("\n");
+        }
         return "";
     }
     

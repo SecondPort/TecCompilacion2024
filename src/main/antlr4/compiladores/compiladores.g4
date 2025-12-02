@@ -28,13 +28,18 @@ AND : '&&';
 OR : '||';
 INT : 'int';
 DOUBLE : 'double';
+CHAR : 'char';
 VOID : 'void';
 IF : 'if';
 ELSE : 'else';
 WHILE : 'while';
 FOR : 'for';
+BREAK : 'break';
+CONTINUE : 'continue';
 
 NUMERO : DIGITO+ ;
+
+CHAR_CONST : '\'' . '\'' ;
 
 ID : (LETRA | '_')(LETRA | DIGITO | '_')* ;
 
@@ -52,6 +57,8 @@ instruccion : declaracion
 |             iif
 |             iwhile
 |             ifor
+|             ibreak
+|             icontinue
 |             prototipofunc
 |             declaracionfunc
 |             llamadafunc
@@ -60,10 +67,12 @@ instruccion : declaracion
 declaracion : tipo ID inicializacion listaid PYC ;
 
 tipo : INT
-|      DOUBLE 
+|      DOUBLE
+|      CHAR
 ;
 
 inicializacion : ASIGN NUMERO
+|                ASIGN CHAR_CONST
 |
 ;
 
@@ -89,6 +98,7 @@ term : MULT factor term
 ;
 
 factor : NUMERO
+|        CHAR_CONST
 |        ID
 |        PA expresion PC
 ;
@@ -103,6 +113,10 @@ ielse : ELSE bloque
 ;
 
 iwhile : WHILE condicion bloque ;
+
+ibreak : BREAK PYC ;
+
+icontinue : CONTINUE PYC ;
 
 condicion : PA comparacion listacomp PC ;
 

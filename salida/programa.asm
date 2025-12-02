@@ -1,14 +1,8 @@
 section .bss
     ; Variables globales
-    x: resd 1  ; int
-    y: resd 1  ; int
-    z: resd 1  ; int
-    b: resd 1  ; int
-    j: resd 1  ; int
-    suma: resd 1  ; int
     i: resd 1  ; int
-    k: resd 1  ; int
-    l: resd 1  ; int
+    suma: resd 1  ; int
+    c: resb 1  ; char
 
 ; Código ensamblador generado automáticamente
 ; Compilador: TecCompilacion2024
@@ -20,49 +14,16 @@ global _start
 section .text
 _start:
     ; Inicio del programa
-    ; Inicialización de x
-    mov dword [x], 1
-    ; Inicialización de y
-    mov dword [y], 3
-    ; Inicialización de b
-    mov dword [b], 5
-
-    ; Asignación a x
-    mov eax, 1
-    push eax
-    mov eax, [y]
-    mov ebx, eax
-    pop eax
-    add eax, ebx  ; suma
-    mov [x], eax
-
-    ; Asignación a x
-    mov eax, 1
-    push eax
-    mov eax, [b]
-    mov ebx, eax
-    pop eax
-    add eax, ebx  ; suma
-    mov [x], eax
-
-    ; Asignación a z
-    mov eax, 1
-    push eax
-    mov eax, [y]
-    mov ebx, eax
-    pop eax
-    add eax, ebx  ; suma
-    mov [z], eax
-    ; Inicialización de j
-    mov dword [j], 0
     ; Inicialización de suma
     mov dword [suma], 0
+    ; Inicialización de c (char)
+    mov byte [c], 97
 
     ; Estructura FOR
     ; Inicialización de i
     mov dword [i], 0
 L0:
-    mov eax, [i]
+    movsx eax, byte [i]
     push eax
     mov eax, 10
     mov ebx, eax
@@ -71,10 +32,42 @@ L0:
     je L1  ; salir si falso
     ; Inicio de bloque
 
-    ; Asignación a suma
-    mov eax, [suma]
+    ; Estructura IF
+    movsx eax, byte [i]
     push eax
-    mov eax, [i]
+    mov eax, 3
+    mov ebx, eax
+    pop eax
+    cmp eax, ebx  ; comparación
+    je L2  ; saltar si falso
+    ; Inicio de bloque
+    ; continue
+    jmp L0
+    ; Fin de bloque
+    jmp L3  ; saltar al final
+L2:
+L3:
+
+    ; Estructura IF
+    movsx eax, byte [i]
+    push eax
+    mov eax, 7
+    mov ebx, eax
+    pop eax
+    cmp eax, ebx  ; comparación
+    je L4  ; saltar si falso
+    ; Inicio de bloque
+    ; break
+    jmp L1
+    ; Fin de bloque
+    jmp L5  ; saltar al final
+L4:
+L5:
+
+    ; Asignación a suma
+    movsx eax, byte [suma]
+    push eax
+    movsx eax, byte [i]
     mov ebx, eax
     pop eax
     add eax, ebx  ; suma
@@ -84,60 +77,6 @@ L0:
     inc dword [i]
     jmp L0  ; repetir bucle
 L1:
-
-    ; Estructura FOR
-    ; Inicialización de k
-    mov dword [k], 0
-L2:
-    mov eax, [k]
-    push eax
-    mov eax, 5
-    mov ebx, eax
-    pop eax
-    cmp eax, ebx  ; comparación
-    je L3  ; salir si falso
-    ; Inicio de bloque
-
-    ; Asignación a j
-    mov eax, [j]
-    push eax
-    mov eax, 1
-    mov ebx, eax
-    pop eax
-    add eax, ebx  ; suma
-    mov [j], eax
-    ; Fin de bloque
-    ; Incremento de k
-    inc dword [k]
-    jmp L2  ; repetir bucle
-L3:
-
-    ; Estructura FOR
-    ; Inicialización de l
-    mov dword [l], 0
-L4:
-    mov eax, [l]
-    push eax
-    mov eax, 3
-    mov ebx, eax
-    pop eax
-    cmp eax, ebx  ; comparación
-    je L5  ; salir si falso
-    ; Inicio de bloque
-
-    ; Asignación a x
-    mov eax, [x]
-    push eax
-    mov eax, 1
-    mov ebx, eax
-    pop eax
-    add eax, ebx  ; suma
-    mov [x], eax
-    ; Fin de bloque
-    ; Incremento de l
-    inc dword [l]
-    jmp L4  ; repetir bucle
-L5:
 
     ; Fin del programa
     mov eax, 1        ; syscall: exit
