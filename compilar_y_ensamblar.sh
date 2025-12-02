@@ -99,14 +99,12 @@ echo -e "${BLUE}Archivos generados:${NC}"
 echo -e "  • Código ASM: ${GREEN}salida/programa.asm${NC}"
 echo -e "  • Objeto:     ${GREEN}salida/programa.o${NC}"
 echo -e "  • Ejecutable: ${GREEN}salida/programa${NC}"
+echo -e "  • Código Intermedio: ${GREEN}salida/codigo_intermedio.txt${NC}"
+echo -e "  • Código Optimizado: ${GREEN}salida/codigo_optimizado.txt${NC}"
 echo -e "${BLUE}========================================${NC}\n"
 
 # Opciones adicionales
 echo -e "${YELLOW}Comandos útiles:${NC}"
 echo -e "  Ver código ASM:    ${GREEN}cat salida/programa.asm${NC}"
 echo -e "  Ver desensamblado: ${GREEN}objdump -d salida/programa${NC}"
-echo -e "  Debugear con GDB:  ${GREEN}gdb salida/programa${NC}"
-echo -e "  Ver archivo info:  ${GREEN}file salida/programa${NC}\n"
-
-echo -e "${GREEN}¡Compilación completada exitosamente!${NC}"
 
