@@ -4,6 +4,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.Token;
 import java.io.PrintWriter;
 import java.io.IOException;
 import java.util.List;
@@ -79,9 +80,25 @@ public class App {
         // Fase 3: Crear un buffer de tokens generados por el lexer
         // Este buffer permite al parser consumir tokens según sea necesario
         CommonTokenStream tokens = new CommonTokenStream(lexer);
-        
+
         // Fase 4: Crear el parser que consume tokens y construye el árbol sintáctico
         compiladoresParser parser = new compiladoresParser(tokens);
+
+        // (Opcional) Generar tabla de tokens a archivo
+        try (PrintWriter tokenOut = new PrintWriter("doc/Tokens.txt")) {
+            tokenOut.println("TIPO\tLEXEMA\tLINEA\tCOLUMNA");
+            tokens.fill();
+            for (Token t : tokens.getTokens()) {
+                String tipo = parser.getVocabulary().getSymbolicName(t.getType());
+                if (tipo == null) {
+                    tipo = String.valueOf(t.getType());
+                }
+                String lexema = t.getText().replace("\n", "\\n").replace("\r", "\\r");
+                tokenOut.printf("%s\t%s\t%d\t%d%n", tipo, lexema, t.getLine(), t.getCharPositionInLine());
+            }
+        } catch (IOException e) {
+            System.err.println("No se pudo escribir doc/Tokens.txt: " + e.getMessage());
+        }
                 
         // Fase 5: Crear el Listener para análisis semántico (patrón Observer)
         compiladoresBaseListener escucha = new Escucha();

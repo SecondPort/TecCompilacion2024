@@ -23,7 +23,7 @@ _start:
     ; Inicialización de i
     mov dword [i], 0
 L0:
-    movsx eax, byte [i]
+    mov eax, [i]
     push eax
     mov eax, 10
     mov ebx, eax
@@ -33,7 +33,7 @@ L0:
     ; Inicio de bloque
 
     ; Estructura IF
-    movsx eax, byte [i]
+    mov eax, [i]
     push eax
     mov eax, 3
     mov ebx, eax
@@ -49,7 +49,7 @@ L2:
 L3:
 
     ; Estructura IF
-    movsx eax, byte [i]
+    mov eax, [i]
     push eax
     mov eax, 7
     mov ebx, eax
@@ -65,9 +65,9 @@ L4:
 L5:
 
     ; Asignación a suma
-    movsx eax, byte [suma]
+    mov eax, [suma]
     push eax
-    movsx eax, byte [i]
+    mov eax, [i]
     mov ebx, eax
     pop eax
     add eax, ebx  ; suma

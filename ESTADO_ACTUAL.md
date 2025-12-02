@@ -140,6 +140,7 @@ La descripción se organiza por secciones del enunciado.
 		- No se revisan los tipos en comparaciones (`<`, `==`, etc.).
 	- El campo `tipoDato` en `Id` se maneja como `String`, sin lógica de coerción o chequeo fuerte de tipos.
 
+
 - ⚠️ **Verificación semántica de funciones (parámetros, retorno)**
 	- La gramática soporta:
 		- Prototipos (`prototipofunc`).
@@ -149,7 +150,7 @@ La descripción se organiza por secciones del enunciado.
 	- Sin embargo, en la implementación actual:
 		- La clase `Funcion` no llena ni usa la lista de `argumentos`.
 		- No se verifica el número ni tipo de parámetros en llamadas a funciones.
-		- La gramática no incluye todavía una instrucción `return`, por lo que tampoco se verifica el tipo de retorno.
+		- Aunque la gramática ya incluye la instrucción `return` y se genera código intermedio para ella, todavía no se verifica semánticamente que el tipo del valor devuelto coincida con el tipo declarado de la función ni que todas las rutas de una función no-`void` devuelvan un valor.
 
 - ⚠️ **Diferenciación entre errores y warnings**
 	- El código usa un contador `errors` en `Escucha` y mensajes por `System.out.println`, pero **no hay distinción formal entre error crítico y warning**.
@@ -220,9 +221,12 @@ La descripción se organiza por secciones del enunciado.
 	- `visitIbreak` y `visitIcontinue` emiten instrucciones `goto` hacia la etiqueta de fin de bucle actual (`break`) o de inicio/continuación (`continue`), usando pilas para manejar bucles anidados.
 	- `visitFinfor` maneja `i++`, `i--` y expresiones de actualización generales.
 
-- ⚠️ **Llamadas a funciones y retorno de valores (en tres direcciones)**
-	- La gramática soporta llamadas (`llamadafunc`, `factorfunc`, `listafactfunc`), pero **`GeneradorCodigoIntermedio` todavía no implementa métodos específicos para estas reglas**.
-	- Por tanto, hoy **no se genera código intermedio para llamadas a funciones** ni para `return` (que tampoco está en la gramática).
+- ✅/⚠️ **Llamadas a funciones y retorno de valores (en tres direcciones)**
+	- La gramática soporta llamadas (`llamadafunc`, `factorfunc`, `listafactfunc`) y la instrucción `return` (`ireturn`).
+	- `GeneradorCodigoIntermedio` implementa métodos específicos:
+		- `visitLlamadafunc`/`visitFactorfunc`/`visitListafactfunc` generan una instrucción de tres direcciones tipo `call nombre, arg, tResultado` (modelo simplificado de uno o pocos argumentos).
+		- `visitIreturn` genera una instrucción `return valor` (o `return` sin valor) que modela la salida de una función.
+	- Limitación actual: el modelo de argumentos es simplificado (no hay una representación estructurada de múltiples parámetros) y todavía no se enlazan directamente estas instrucciones con una semántica de tipos de retorno.
 
 - ⚠️ **Integración en el flujo principal**
 	- Existe la clase `GeneradorCodigoIntermedio`, pero **`App.java` actualmente no la usa** (está comentado el uso de `Caminante` y no aparece una invocación directa al generador intermedio).
@@ -230,16 +234,11 @@ La descripción se organiza por secciones del enunciado.
 
 **Qué falta para cumplir totalmente esta sección:**
 
-- Integrar `GeneradorCodigoIntermedio` en el flujo de `App.java`:
-	- Después del análisis semántico (y solo si no hay errores críticos), crear una instancia, llamar `visit(tree)` y obtener `List<Instruccion>`.
-	- Volcar esa lista a un archivo, por ejemplo `doc/CodigoIntermedio.txt`.
+- Refinar la generación para **llamadas a funciones**:
+	- Definir una convención más explícita para múltiples argumentos (por ejemplo, secuencia de `param` o pushes individuales) y reflejarla en las instrucciones intermedias.
+	- Relacionar las instrucciones `call`/`return` con información de tipos para facilitar comprobaciones posteriores.
 
-- Completar generación para **llamadas a funciones**:
-	- Implementar `visitLlamadafunc`, `visitFactorfunc`, `visitListafactfunc` en `GeneradorCodigoIntermedio`:
-		- Generar instrucciones para pasar parámetros (por ejemplo, `param x` o pushes temporales).
-		- Instrucción de llamada (`call f`) modelada como `Instruccion` (convención propia) y retorno en un temporal.
-
-- (Futuro) Extender la gramática con `return` y generar las instrucciones intermedias necesarias (`return tX`).
+- (Futuro) Integrar estas instrucciones con un sistema de tipos más fuerte para validar coherencia entre firmas de funciones y usos.
 
 ---
 
@@ -281,9 +280,10 @@ La descripción se organiza por secciones del enunciado.
 - ⚠️ **Optimización de bucles**
 	- No hay optimizaciones específicas de bucles aún (como mover cómputos invariantes fuera del loop, "strength reduction", etc.).
 
-- ⚠️ **Integración de optimizador en el pipeline**
-	- `Optimizador` está implementado pero no parece ser invocado desde `App.java` ni desde otra clase orquestadora.
-	- No se genera un archivo de código intermedio optimizado distinto del original.
+**Integración de optimizador en el pipeline**
+	- `Optimizador` está integrado en `App.java`:
+		- Tras generar el código intermedio, se llama a `optimizador.optimizar(instrucciones)`.
+		- El resultado se escribe en `salida/codigo_optimizado.txt`, separado del código intermedio original.
 
 **Qué falta para cumplir totalmente esta sección:**
 
@@ -309,10 +309,10 @@ Con las técnicas ya implementadas (propagación de constantes, constant folding
 
 **Estado actual:**
 
-- ⚠️ **Archivos de código intermedio y optimizado**
-	- Existe `doc/CodigoIntermedio.txt`, pero no hay código que lo llene automáticamente; parece ser un archivo previsto para esta fase.
-	- `GeneradorCodigoIntermedio` produce una `List<Instruccion>`, pero no hay código que la vuelque a archivo.
-	- `Optimizador` devuelve otra lista, pero tampoco se escribe un archivo de salida optimizada.
+- ✅ **Archivos de código intermedio y optimizado**
+	- `GeneradorCodigoIntermedio` produce una `List<Instruccion>` que se vuelca automáticamente desde `App.java` al archivo `salida/codigo_intermedio.txt`.
+	- `Optimizador` devuelve otra lista que se escribe en `salida/codigo_optimizado.txt`, representando el código intermedio optimizado.
+	- El archivo `doc/CodigoIntermedio.txt` puede considerarse histórico o auxiliar; la salida estándar actualmente se ubica bajo `salida/`.
 
 - ✅ **Salida de código ensamblador**
 	- `GeneradorAssembler` genera código ensamblador NASM y lo escribe a un archivo (por ejemplo `salida/programa.asm`, según README).
