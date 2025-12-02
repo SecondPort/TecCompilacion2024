@@ -4,6 +4,9 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+import java.util.List;
 
 /**
  * Clase principal del compilador que orquesta el proceso completo de compilación.
@@ -97,6 +100,31 @@ public class App {
         
         // Fase 8: Imprimir la representación textual del árbol sintáctico generado
         System.out.println(tree.toStringTree(parser));
+        
+        // Generación de Código Intermedio
+        System.out.println("\n--- Generando Código Intermedio ---");
+        GeneradorCodigoIntermedio generadorCI = new GeneradorCodigoIntermedio();
+        generadorCI.visit(tree);
+        List<Instruccion> instrucciones = generadorCI.getInstrucciones();
+        
+        // Guardar Código Intermedio
+        try (PrintWriter out = new PrintWriter("salida/codigo_intermedio.txt")) {
+            for (Instruccion ins : instrucciones) {
+                out.println(ins);
+            }
+        }
+        
+        // Optimización
+        System.out.println("\n--- Optimizando Código Intermedio ---");
+        Optimizador optimizador = new Optimizador();
+        List<Instruccion> optimizadas = optimizador.optimizar(instrucciones);
+        
+        // Guardar Código Optimizado
+        try (PrintWriter out = new PrintWriter("salida/codigo_optimizado.txt")) {
+            for (Instruccion ins : optimizadas) {
+                out.println(ins);
+            }
+        }
         
         // Fase 9: Generación de código ensamblador
         System.out.println("\n--- Iniciando generación de código ensamblador ---");
