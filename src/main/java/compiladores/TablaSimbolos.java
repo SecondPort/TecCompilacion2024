@@ -193,6 +193,23 @@ public final class TablaSimbolos {
         }
         return false;
     }  
+
+    /**
+     * Recorre todos los símbolos de todos los contextos y aplica un consumidor.
+     * <p>
+     * Útil para recorridos globales al finalizar la compilación, por ejemplo
+     * para generar advertencias de variables no usadas o no inicializadas.
+     * </p>
+     *
+     * @param consumidor acción a aplicar sobre cada {@link Id}
+     */
+    public void paraCadaSimbolo(java.util.function.Consumer<Id> consumidor) {
+        for (Map<String, Id> contexto : ts) {
+            for (Id id : contexto.values()) {
+                consumidor.accept(id);
+            }
+        }
+    }
 }
 
 /**

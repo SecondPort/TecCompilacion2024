@@ -97,6 +97,20 @@ public class Escucha extends compiladoresBaseListener {
     public void exitPrograma(final ProgramaContext ctx) {
         super.exitPrograma(ctx);
         tabla.delContexto();
+
+        // Generar warnings por símbolos no usados o no inicializados
+        tabla.paraCadaSimbolo(id -> {
+            String nombre = id.getNombre();
+            if (Boolean.FALSE.equals(id.getUsado())) {
+                reportador.warning("Identificador declarado pero no usado: " + nombre,
+                        ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
+            }
+            if (Boolean.FALSE.equals(id.getInicializado())) {
+                reportador.warning("Identificador declarado pero no inicializado: " + nombre,
+                        ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
+            }
+        });
+
         reportador.info("Fin de la compilacion", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
         reportador.info("Se visitaron " + nodos + " nodos", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
         reportador.info("Hay " + tokens + " tokens", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
@@ -304,6 +318,8 @@ public class Escucha extends compiladoresBaseListener {
             else if (simbolo != null && simbolo.getInicializado() == false) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
+            } else {
+                simbolo.setUsado(true);
             }
         }  
     }
@@ -329,6 +345,8 @@ public class Escucha extends compiladoresBaseListener {
             else if (simbolo != null && simbolo.getInicializado() == false) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
+            } else {
+                simbolo.setUsado(true);
             }
         } 
     }
@@ -356,6 +374,8 @@ public class Escucha extends compiladoresBaseListener {
             else if (simbolo != null && simbolo.getInicializado() == false) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
+            } else {
+                simbolo.setUsado(true);
             }
         } 
     }
@@ -383,6 +403,8 @@ public class Escucha extends compiladoresBaseListener {
             else if (simbolo != null && simbolo.getInicializado() == false) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
+            } else {
+                simbolo.setUsado(true);
             }
         } 
     }
@@ -410,6 +432,8 @@ public class Escucha extends compiladoresBaseListener {
             else if (simbolo != null && simbolo.getInicializado() == false) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
+            } else {
+                simbolo.setUsado(true);
             }
         } 
     }
