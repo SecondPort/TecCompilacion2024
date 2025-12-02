@@ -370,6 +370,24 @@ class Funcion extends Id {
      * </p>
      */
     private List<TipoDato> argumentos;
+
+    /**
+     * Obtiene la lista de tipos de datos de los argumentos de la función.
+     *
+     * @return la lista de {@link TipoDato} de los argumentos, o {@code null} si no está definida
+     */
+    public List<TipoDato> getArgumentos() {
+        return argumentos;
+    }
+
+    /**
+     * Establece la lista de tipos de datos de los argumentos de la función.
+     *
+     * @param argumentos la lista de {@link TipoDato} que representa los tipos de los parámetros
+     */
+    public void setArgumentos(List<TipoDato> argumentos) {
+        this.argumentos = argumentos;
+    }
 }
 
 /**

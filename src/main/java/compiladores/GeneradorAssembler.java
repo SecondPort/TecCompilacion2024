@@ -3,7 +3,9 @@ package compiladores;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import compiladores.compiladoresParser.*;
 
@@ -73,6 +75,12 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
      * Ruta del archivo de salida donde se escribirá el código ensamblador.
      */
     private String archivoSalida;
+    
+    /**
+     * Conjunto de variables ya declaradas en la sección .bss para evitar duplicados.
+     * Previene errores de ensamblador cuando variables con el mismo nombre se declaran múltiples veces.
+     */
+    private Set<String> variablesDeclaradas;
 
     /**
      * Constructor que inicializa el generador de código ensamblador.
@@ -90,6 +98,7 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         this.offsetsVariables = new HashMap<>();
         this.offsetActual = 0;
         this.archivoSalida = archivoSalida;
+        this.variablesDeclaradas = new HashSet<>();
         
         inicializarCodigo();
     }
@@ -181,12 +190,13 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         String nombre = ctx.ID().getText();
         String tipo = ctx.tipo().getText();
         
-        // Reservar espacio en la sección de datos
-        if (tipo.equals("int") || tipo.equals("double")) {
+        // Reservar espacio en la sección de datos solo si no ha sido declarada antes
+        if ((tipo.equals("int") || tipo.equals("double")) && !variablesDeclaradas.contains(nombre)) {
             seccionDatos.append("    ").append(nombre).append(": resd 1  ; ")
                        .append(tipo).append("\n");
             offsetsVariables.put(nombre, offsetActual);
             offsetActual += 4; // 4 bytes por variable
+            variablesDeclaradas.add(nombre);
         }
         
         // Si tiene inicialización, generar código de asignación
@@ -497,6 +507,21 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
      * Traduce el bucle for a una estructura equivalente con inicialización,
      * condición de continuación y expresión de actualización.
      * </p>
+     * <p>
+     * <b>Estructura generada:</b>
+     * <pre>
+     * for (int i = 0; i < 5; i++) { ... }
+     * →
+     *     mov dword [i], 0      ; inicialización
+     * loop_start:
+     *     cmp [i], 5            ; condición
+     *     jge loop_end          ; salir si falso
+     *     ; cuerpo del bucle
+     *     inc dword [i]         ; actualización
+     *     jmp loop_start
+     * loop_end:
+     * </pre>
+     * </p>
      *
      * @param ctx el contexto del nodo {@code ifor} del árbol sintáctico
      * @return cadena vacía
@@ -508,22 +533,87 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         
         codigo.append("\n    ; Estructura FOR\n");
         
-        // Visitar la declaración/inicialización del for
-        visitCiclo(ctx.ciclo());
+        // Obtener el contexto del ciclo: PA declaracion comparacion PYC finfor PC
+        CicloContext ciclo = ctx.ciclo();
         
+        // 1. Procesar inicialización (declaracion)
+        if (ciclo.declaracion() != null) {
+            visitDeclaracion(ciclo.declaracion());
+        }
+        
+        // 2. Etiqueta de inicio del bucle (ANTES de la condición)
         codigo.append(etiquetaInicio).append(":\n");
         
-        // La condición ya fue procesada en ciclo
-        // Saltar al final si es falsa
+        // 3. Evaluar condición (comparacion)
+        if (ciclo.comparacion() != null) {
+            visitComparacion(ciclo.comparacion());
+        }
+        
+        // 4. Saltar al final si la condición es falsa
         codigo.append("    je ").append(etiquetaFin).append("  ; salir si falso\n");
         
-        // Cuerpo del for
+        // 5. Cuerpo del for
         visitBloque(ctx.bloque());
         
-        // Volver al inicio
+        // 6. Procesar actualización (finfor: i++, i--, o expresion)
+        if (ciclo.finfor() != null) {
+            visitFinfor(ciclo.finfor());
+        }
+        
+        // 7. Volver al inicio del bucle
         codigo.append("    jmp ").append(etiquetaInicio).append("  ; repetir bucle\n");
         codigo.append(etiquetaFin).append(":\n");
         
+        return "";
+    }
+    
+    /**
+     * Procesa la actualización del bucle for (incremento, decremento o expresión).
+     * <p>
+     * Maneja las tres formas posibles de actualización en un for:
+     * <ul>
+     *   <li>ID++ (incremento)</li>
+     *   <li>ID-- (decremento)</li>
+     *   <li>expresion (asignación general)</li>
+     * </ul>
+     * </p>
+     *
+     * @param ctx el contexto del nodo {@code finfor} del árbol sintáctico
+     * @return cadena vacía
+     */
+    @Override
+    public String visitFinfor(FinforContext ctx) {
+        if (ctx.INCREMENTO() != null && ctx.ID() != null) {
+            // Caso: i++
+            String variable = ctx.ID().getText();
+            codigo.append("    ; Incremento de ").append(variable).append("\n");
+            codigo.append("    inc dword [").append(variable).append("]\n");
+        } else if (ctx.DECREMENTO() != null && ctx.ID() != null) {
+            // Caso: i--
+            String variable = ctx.ID().getText();
+            codigo.append("    ; Decremento de ").append(variable).append("\n");
+            codigo.append("    dec dword [").append(variable).append("]\n");
+        } else if (ctx.expresion() != null) {
+            // Caso: expresión general (ej: i = i + 1)
+            codigo.append("    ; Actualización por expresión\n");
+            visitExpresion(ctx.expresion());
+        }
+        return "";
+    }
+    
+    /**
+     * Procesa el ciclo del for sin generar código adicional.
+     * <p>
+     * Este método existe para evitar que el visitor por defecto procese
+     * el ciclo de manera incorrecta. El procesamiento real se hace en visitIfor.
+     * </p>
+     *
+     * @param ctx el contexto del nodo {@code ciclo} del árbol sintáctico
+     * @return cadena vacía
+     */
+    @Override
+    public String visitCiclo(CicloContext ctx) {
+        // No hacer nada aquí - el procesamiento se hace en visitIfor
         return "";
     }
 

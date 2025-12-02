@@ -1,8 +1,5 @@
 package compiladores;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ErrorNode;
 import org.antlr.v4.runtime.tree.TerminalNode;
@@ -66,12 +63,6 @@ public class Escucha extends compiladoresBaseListener {
      */
     private TablaSimbolos tabla = TablaSimbolos.getInstancia();
     
-    /**
-     * Lista temporal de errores acumulados en un contexto específico.
-     * Permite agrupar múltiples errores antes de imprimirlos, evitando salidas fragmentadas.
-     */
-    private List<String> erroresAcumulados = new ArrayList<>();
-    // private List<String> erroresAcumulados1 = new ArrayList<>();
 
     /**
      * Se invoca al entrar al nodo raíz del programa (inicio del parsing).
@@ -167,7 +158,6 @@ public class Escucha extends compiladoresBaseListener {
     @Override
     public void exitDeclaracion(DeclaracionContext ctx) {
         super.exitDeclaracion(ctx);
-        boolean errorEncontrado = false;
     
         String nombre = ctx.ID().getText();
         // Validación semántica para evitar doble declaración
@@ -182,28 +172,8 @@ public class Escucha extends compiladoresBaseListener {
     
             tabla.addSimbolo(nombre, nuevaVariable);
         } else {
-            erroresAcumulados.add("Error semantico: Doble declaracion del mismo identificador (Linea: " + ctx.getStart().getLine() + ")");
-            errorEncontrado = true;
-        }
-    
-        // Validación sintáctica del punto y coma al final de la declaración
-        Token lastToken = ctx.getStop();
-        if (lastToken == null || !lastToken.getText().equals(";")) {
-            erroresAcumulados.add("Error sintáctico: se esperaba ';' al final de la declaración (Línea: " + ctx.getStop().getLine() + ")");
-            errorEncontrado = true;
-        }
-    
-        // Incrementamos el contador de errores solo si se encontró alguno.
-        if (errorEncontrado) {
+            System.out.println("Error semantico: Doble declaracion del mismo identificador (Linea: " + ctx.getStart().getLine() + ")");
             errors++;
-        }
-    
-        // Imprimir todos los errores acumulados al final de la ejecución o aquí mismo.
-        if (!erroresAcumulados.isEmpty()) {
-            for (String error : erroresAcumulados) {
-                System.out.println(error);
-            }
-            erroresAcumulados.clear();  // Limpiar la lista después de imprimir los errores.
         }
     }
     
@@ -302,39 +272,20 @@ public class Escucha extends compiladoresBaseListener {
     @Override
     public void exitAsignacion(AsignacionContext ctx) {
         super.exitAsignacion(ctx);
-        boolean errorEncontrado = false;
 
-        // Primero realizamos la validación semántica de la asignación.
+        // Validación semántica de la asignación
         if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
-                erroresAcumulados.add("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
-                errorEncontrado = true;           
+                // La variable destino debe estar declarada previamente
+                System.out.println("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
+                errors++;           
+            } else {
+                // La variable destino está siendo asignada, marcarla como inicializada.
+                // La validación de variables no inicializadas en el lado derecho (expresión)
+                // se realiza en exitFactor() cuando se evalúa cada operando.
+                simbolo.setInicializado(true);
             }
-            else if (!simbolo.getInicializado()) {
-                erroresAcumulados.add("Error semantico: Uso de un identificador no inicializado (Linea: " + ctx.getStart().getLine() + ")");
-                errorEncontrado = true;
-            }
-        }
-
-        // Luego verificamos la correcta terminación sintáctica con un punto y coma.
-        Token lastToken = ctx.getStop();
-        if (lastToken == null || !lastToken.getText().equals(";")) {
-            erroresAcumulados.add("Error sintáctico: se esperaba ';' al final de la asignación (Línea: " + ctx.getStop().getLine() + ")");
-            errorEncontrado = true;
-        }
-
-        // Incrementamos el contador de errores solo si se encontró alguno.
-        if (errorEncontrado) {
-            errors++;
-        }
-
-        // Imprimir todos los errores acumulados al final de la ejecución o aquí mismo.
-        if (!erroresAcumulados.isEmpty()) {
-            for (String error : erroresAcumulados) {
-                System.out.println(error);
-            }
-            erroresAcumulados.clear();  // Limpiar la lista después de imprimir los errores.
         }
     }
 

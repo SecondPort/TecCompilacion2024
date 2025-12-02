@@ -36,7 +36,7 @@ public class App {
      * <p>
      * <b>Proceso de compilación:</b>
      * <ol>
-     *   <li>Lee el archivo fuente desde {@code entrada/programa.txt}</li>
+     *   <li>Lee el archivo fuente desde el argumento de línea de comandos o usa {@code entrada/programa.txt} por defecto</li>
      *   <li>Crea un {@link compiladoresLexer} para análisis léxico</li>
      *   <li>Genera un stream de tokens a partir del lexer</li>
      *   <li>Crea un {@link compiladoresParser} que consume los tokens</li>
@@ -49,7 +49,7 @@ public class App {
      * patrón Visitor ({@link Caminante}) para recorridos alternativos del árbol.
      * </p>
      *
-     * @param args argumentos de línea de comandos (actualmente no utilizados)
+     * @param args argumentos de línea de comandos - args[0] debe ser la ruta del archivo a compilar
      * @throws Exception si ocurre un error durante la lectura del archivo o el proceso
      *                   de compilación (ej: archivo no encontrado, errores de sintaxis graves)
      * @see CharStreams#fromFileName(String)
@@ -58,8 +58,17 @@ public class App {
     public static void main(String[] args) throws Exception {
         System.out.println("Hello, Compilador!!!");
         
+        // Determinar el archivo de entrada
+        String archivoEntrada = "entrada/programa.txt"; // Valor por defecto
+        if (args.length > 0) {
+            archivoEntrada = args[0];
+            System.out.println("Compilando archivo: " + archivoEntrada);
+        } else {
+            System.out.println("No se proporcionó archivo de entrada, usando por defecto: " + archivoEntrada);
+        }
+        
         // Fase 1: Crear un CharStream que lee desde el archivo de entrada
-        CharStream input = CharStreams.fromFileName("entrada/programa.txt");
+        CharStream input = CharStreams.fromFileName(archivoEntrada);
 
         // Fase 2: Crear el lexer que analiza el CharStream y produce tokens
         compiladoresLexer lexer = new compiladoresLexer(input);
