@@ -24,19 +24,16 @@ La descripción se organiza por secciones del enunciado.
 	- ANTLR, por defecto, genera errores léxicos (caracteres no reconocidos), pero **no hay un `ErrorListener` léxico propio** ni una lógica específica que clasifique y reporte errores léxicos con formato unificado (colores, tipo de error, etc.).
 	- Los errores típicamente se imprimen en `stderr` con el formato estándar de ANTLR.
 
-- ✅/⚠️ **Tabla de tokens**
-	- Existe un archivo de prueba `entrada/tokens.txt`, lo que indica que en algún momento se generó una tabla/lista de tokens de ejemplo.
-	- Sin embargo, **no hay una clase dedicada** a "tabla de tokens" ni un módulo que serialice todos los tokens leídos a un archivo estructurado (CSV/tabla) de forma sistemática.
-	- Hoy se podría obtener la secuencia de tokens desde `CommonTokenStream`, pero **no hay una implementación explícita que recorra todos los tokens y escriba una tabla**.
+- ✅ **Tabla de tokens**
+	- `App.java` recorre explícitamente el `CommonTokenStream` después de crear el parser y genera una tabla con **tipo de token, lexema, línea y columna**.
+	- La tabla se guarda automáticamente en el archivo `doc/Tokens.txt` cada vez que se ejecuta el compilador.
+	- El tipo de token se obtiene del vocabulario del parser (`getVocabulary().getSymbolicName(type)`), y los saltos de línea en lexemas se escapan para mantener el archivo legible.
 
 **Qué falta para cumplir totalmente esta sección:**
 
 - Añadir un **ErrorListener léxico** personalizado o extender el actual para:
 	- Capturar `LexerNoViableAltException` y errores de canal léxico.
 	- Formatear los mensajes (línea, columna, lexema problemático) con el sistema de colores (rojo para error).
-- Implementar una **rutina que genere una tabla de tokens** después del análisis léxico:
-	- Recorrer `CommonTokenStream`, obtener tipo, lexema, línea, columna.
-	- Guardar en un archivo `doc/Tokens.txt` o similar, con formato tabular.
 
 ---
 
@@ -125,13 +122,13 @@ La descripción se organiza por secciones del enunciado.
 	- **Uso de identificadores en expresiones y otros contextos**:
 		- `exitFactor`, `exitFinfor`, `exitFactorfunc`, `exitListafactfunc`, `exitLlamadafunc`:
 			- Si hay `ID()`, buscan en la tabla de símbolos.
-			- Si no existe, reportan "Error semantico: Uso de un identificador no declarado" con línea.
-			- Si existe pero `getInicializado()==false`, reportan "Uso de un identificador no inicializado".
+			- Si no existe, registran un **error semántico**: uso de identificador no declarado.
+			- Si existe pero `getInicializado()==false`, registran un **error semántico**: uso de identificador no inicializado.
+			- Cuando el identificador existe e inicialmente está correctamente declarado e inicializado, se marca `usado = true` para poder generar warnings posteriores.
 	- **Asignaciones** (`exitAsignacion`):
-		- Verifica si el identificador asignado existe en la tabla.
-		- Si no existe, reporta "identificador no declarado".
+		- Verifica si el identificador asignado existe en la tabla; si no existe, registra error.
+		- Marca la variable como `inicializado = true` cuando la asignación es válida.
 		- También revisa el `;` final (verificado como error sintáctico adicional).
-		- Nota: actualmente exige que el identificador esté inicializado antes de asignar, lo cual es discutible semánticamente (ver pendientes).
 
 - ⚠️ **Verificación de tipos y compatibilidad de operaciones**
 	- Aunque la gramática distingue tipos `int`, `double`, `void`, y existe el enum `TipoDato`, **no hay una verificación sistemática de tipos**:
@@ -152,10 +149,15 @@ La descripción se organiza por secciones del enunciado.
 		- No se verifica el número ni tipo de parámetros en llamadas a funciones.
 		- Aunque la gramática ya incluye la instrucción `return` y se genera código intermedio para ella, todavía no se verifica semánticamente que el tipo del valor devuelto coincida con el tipo declarado de la función ni que todas las rutas de una función no-`void` devuelvan un valor.
 
-- ⚠️ **Diferenciación entre errores y warnings**
-	- El código usa un contador `errors` en `Escucha` y mensajes por `System.out.println`, pero **no hay distinción formal entre error crítico y warning**.
-	- El flag `usado` en `Id` existe, pero **no se marca ni se utiliza** para advertir "variable declarada y no usada" (un caso típico de warning).
-	- No hay un sistema de severidades ni una estructura de reporte unificada (p. ej. `List<Mensaje>` con tipo `ERROR`/`WARNING`).
+- ✅ **Diferenciación entre errores y warnings, y warnings de uso/inicialización**
+	- Se implementó una infraestructura de mensajes centralizada basada en dos clases nuevas:
+		- `Mensaje`: encapsula tipo (`INFO`, `WARNING`, `ERROR`), texto, línea y columna.
+		- `Reportador`: singleton que acumula todos los mensajes generados por el compilador y permite imprimirlos al final.
+	- `Escucha` ya no usa `System.out.println` para reportar errores o información del análisis; en su lugar llama a `Reportador.info(...)`, `Reportador.warning(...)` o `Reportador.error(...)`.
+	- En `exitPrograma`, después de cerrar el ámbito global, se recorre toda la tabla de símbolos y se generan **warnings automáticos** para:
+		- Identificadores declarados pero **no usados** (`usado == false`).
+		- Identificadores declarados pero **no inicializados** (`inicializado == false`).
+	- El listener también registra mensajes informativos al inicio y al final de la compilación (por ejemplo, conteo de nodos y tokens visitados).
 
 **Qué falta para cumplir totalmente esta sección:**
 
@@ -169,16 +171,7 @@ La descripción se organiza por secciones del enunciado.
 	- Al visitar llamadas (`exitLlamadafunc`, `exitFactorfunc`, `exitListafactfunc`), comparar número y tipo de argumentos con la firma de la función.
 	- Extender la gramática con `return` y verificar que las funciones no `void` devuelvan un valor compatible.
 
-- Ajustar la lógica de **inicialización** en asignaciones:
-	- En `exitAsignacion`, en lugar de exigir que la variable ya esté inicializada, se debería **marcarla como inicializada** después de procesar la asignación correcta.
-	- Mantener la verificación "uso sin inicializar" solo en contextos de lectura (como `Factor`).
-
-- Implementar **warnings**:
-	- Marcar `usado = true` cada vez que se lee una variable/función.
-	- Al final de `exitPrograma`, recorrer la tabla de símbolos y emitir warnings para:
-		- Variables declaradas y nunca usadas.
-		- Variables declaradas y nunca inicializadas.
-	- Distinguir claramente en la salida: `[ERROR] ...` vs `[WARNING] ...`.
+- Completar el **sistema de tipos** y la **semántica de funciones** descritos arriba (tipos de retorno, parámetros, compatibilidad de tipos), usando el sistema de mensajes ya unificado para reportar tanto errores como warnings adicionales.
 
 ---
 
@@ -318,26 +311,20 @@ Con las técnicas ya implementadas (propagación de constantes, constant folding
 	- `GeneradorAssembler` genera código ensamblador NASM y lo escribe a un archivo (por ejemplo `salida/programa.asm`, según README).
 	- Esto supera parcialmente el requisito, ya que se tiene un backend real.
 
-- ⚠️ **Sistema de reporte de errores/warnings con colores**
-	- Actualmente los mensajes de error y debug se imprimen con `System.out.println` de texto plano.
-	- No hay categorización formal (`[OK]`, `[WARNING]`, `[ERROR]`) ni colores ANSI.
-	- No hay resumen consolidado (lista ordenada) de errores y warnings al final de la compilación, aunque `Escucha` lleva un contador `errors`.
+- ✅/⚠️ **Sistema de reporte de errores/warnings**
+	- Se implementó un **sistema centralizado de mensajes** basado en `Mensaje` y `Reportador`.
+	- Durante el análisis (principalmente en `Escucha`), todos los errores, warnings e información se registran en el `Reportador` en lugar de imprimirse directamente en consola.
+	- Al final de la ejecución de `App`, se imprime una sección "Mensajes del compilador" que lista ordenadamente todos los mensajes acumulados.
+	- Aún no se aplican colores ANSI en consola, pero sí existe una categorización explícita por tipo (`INFO`, `WARNING`, `ERROR`) y un lugar único donde extender el formato de salida.
 
 **Qué falta para cumplir totalmente esta sección:**
 
-- Implementar salida a archivo para:
-	- **Código intermedio original** (por ejemplo `doc/CodigoIntermedio.txt`).
-	- **Código intermedio optimizado** (por ejemplo `doc/CodigoIntermedio_Optimizado.txt`).
+- (Opcional) Implementar salida adicional a archivo para:
+	- **Tabla de mensajes** (por ejemplo `doc/Mensajes.txt`), reutilizando el `Reportador`.
 
-- Centralizar y estandarizar el **sistema de reporte**:
-	- Crear una estructura `Mensaje` con campos: tipo (`ERROR`, `WARNING`, `INFO`), texto, línea, columna, fase (léxico/sintáctico/semántico/optimización).
-	- Acumular todos los mensajes en una lista global o en un `Reportador` central.
-	- Al final de la compilación, imprimirlos con colores ANSI (cuando se ejecute en consola que los soporte) o con prefijos claros.
-	- Ejemplo de colores en consola Java (para terminal que soporte ANSI):
-		- Rojo: `"\u001B[31m"`
-		- Amarillo: `"\u001B[33m"`
-		- Verde: `"\u001B[32m"`
-		- Reset: `"\u001B[0m"`
+- Extender el sistema de reporte para **incluir colores ANSI** en consola:
+	- Asociar colores a cada tipo de mensaje (verde para éxito/INFO relevante, amarillo para `WARNING`, rojo para `ERROR`).
+	- Mantener la misma estructura centralizada para que el cambio afecte a todas las fases del compilador.
 
 ---
 
