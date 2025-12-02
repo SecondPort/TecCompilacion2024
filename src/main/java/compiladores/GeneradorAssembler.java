@@ -171,6 +171,22 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         return "";
     }
 
+    /**
+     * Procesa la declaración completa de una función y genera su etiqueta y cuerpo.
+     * <p>
+     * Para cada función definida en el código fuente se genera una etiqueta con su
+     * nombre, se traduce el bloque asociado y, si no hay un {@code return} explícito
+     * que termine la función, se emite un retorno por defecto que coloca 0 en
+     * {@code eax} y ejecuta {@code ret}.
+     * </p>
+     * <p>
+     * <b>Nota:</b> el manejo de prólogo/epílogo y variables locales es simplificado;
+     * no se utiliza {@code ebp} ni un frame de pila completo.
+     * </p>
+     *
+     * @param ctx el contexto del nodo {@code declaracionfunc} del árbol sintáctico
+     * @return cadena vacía
+     */
     @Override
     public String visitDeclaracionfunc(DeclaracionfuncContext ctx) {
         String nombre = ctx.ID().getText();
@@ -431,6 +447,19 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         return "";
     }
 
+    /**
+     * Procesa una llamada a función y genera el código correspondiente.
+     * <p>
+     * Evalúa opcionalmente un argumento (modelo simplificado de un solo
+     * parámetro), lo pasa por la pila con {@code push eax}, invoca la
+     * función mediante {@code call nombre} y, tras el retorno, limpia la
+     * pila con {@code add esp, 4}. El valor de retorno se asume en
+     * {@code eax} según la convención utilizada.
+     * </p>
+     *
+     * @param ctx el contexto del nodo {@code llamadafunc} del árbol sintáctico
+     * @return cadena vacía
+     */
     @Override
     public String visitLlamadafunc(LlamadafuncContext ctx) {
         String nombre = ctx.ID().getText();

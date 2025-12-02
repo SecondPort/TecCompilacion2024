@@ -5,6 +5,19 @@ import compiladores.compiladoresParser.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Generador de código intermedio en forma de instrucciones de tres direcciones.
+ * <p>
+ * Recorre el árbol sintáctico generado por ANTLR usando el patrón Visitor y
+ * construye una lista de {@link Instruccion} que representa asignaciones,
+ * expresiones, comparaciones, estructuras de control (if/while/for) y
+ * construcciones de alto nivel como llamadas a funciones y sentencias return.
+ * </p>
+ * <p>
+ * También mantiene pilas de etiquetas para soportar correctamente las
+ * sentencias <code>break</code> y <code>continue</code> en bucles anidados.
+ * </p>
+ */
 public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
     private List<Instruccion> instrucciones = new ArrayList<>();
     private int tempCounter = 0;
@@ -12,14 +25,29 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
     private List<String> breakLabels = new ArrayList<>();
     private List<String> continueLabels = new ArrayList<>();
 
+    /**
+     * Devuelve la lista de instrucciones de tres direcciones generadas.
+     *
+     * @return lista inmutable de instrucciones generadas durante la visita
+     */
     public List<Instruccion> getInstrucciones() {
         return instrucciones;
     }
 
+    /**
+     * Crea un nuevo nombre de temporal único (t0, t1, ...).
+     *
+     * @return identificador del nuevo temporal
+     */
     private String newTemp() {
         return "t" + (tempCounter++);
     }
 
+    /**
+     * Crea una nueva etiqueta única (l0, l1, ...).
+     *
+     * @return identificador de la nueva etiqueta
+     */
     private String newLabel() {
         return "l" + (labelCounter++);
     }

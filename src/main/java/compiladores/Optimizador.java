@@ -6,8 +6,26 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Implementa optimizaciones sobre código intermedio en tres direcciones.
+ * <p>
+ * Actualmente aplica de forma iterativa:
+ * <ul>
+ *   <li>Propagación de constantes</li>
+ *   <li>Constant folding (simplificación de expresiones constantes)</li>
+ *   <li>Eliminación de subexpresiones comunes dentro de bloques básicos</li>
+ * </ul>
+ * Las optimizaciones se realizan hasta alcanzar un punto fijo (sin cambios).
+ * </p>
+ */
 public class Optimizador {
 
+    /**
+     * Optimiza una lista de instrucciones de tres direcciones.
+     *
+     * @param instrucciones lista original de instrucciones
+     * @return nueva lista con las instrucciones optimizadas
+     */
     public List<Instruccion> optimizar(List<Instruccion> instrucciones) {
         List<Instruccion> optimizadas = new ArrayList<>();
         // Deep copy to avoid modifying original list objects if we want to preserve them (optional but safer)
