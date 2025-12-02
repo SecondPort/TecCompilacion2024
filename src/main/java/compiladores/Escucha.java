@@ -62,7 +62,11 @@ public class Escucha extends compiladoresBaseListener {
      * Utiliza el patrón Singleton obtenido mediante {@link TablaSimbolos#getInstancia()}.
      */
     private TablaSimbolos tabla = TablaSimbolos.getInstancia();
-    
+
+    /**
+     * Reportador centralizado de mensajes (errores, warnings, información).
+     */
+    private final Reportador reportador = Reportador.getInstancia();
 
     /**
      * Se invoca al entrar al nodo raíz del programa (inicio del parsing).
@@ -75,8 +79,7 @@ public class Escucha extends compiladoresBaseListener {
      */
     @Override
     public void enterPrograma(final ProgramaContext ctx) {
-        System.out.println("Comienza el parsing...");
-        
+        reportador.info("Comienza el parsing...", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
         tabla.addContexto();
         super.enterPrograma(ctx);
     }
@@ -94,10 +97,9 @@ public class Escucha extends compiladoresBaseListener {
     public void exitPrograma(final ProgramaContext ctx) {
         super.exitPrograma(ctx);
         tabla.delContexto();
-
-        System.out.println("Fin de la compilacion");
-        System.out.println("Se visitaron " + nodos + " nodos");
-        System.out.println("Hay " + tokens + " tokens");
+        reportador.info("Fin de la compilacion", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
+        reportador.info("Se visitaron " + nodos + " nodos", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
+        reportador.info("Hay " + tokens + " tokens", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
     }
 
     /**
@@ -133,12 +135,12 @@ public class Escucha extends compiladoresBaseListener {
         // Validación de llaves correctas al finalizar un bloque
         Token lastToken = ctx.getStop();
         if (lastToken == null || !lastToken.getText().equals("}")) {
-            System.out.println("Error sintáctico: se esperaba '}' al final del bloque (Línea: " + ctx.getStop().getLine() + ")");
+            reportador.error("Error sintactico: se esperaba '}' al final del bloque", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
             errors++;
         }
         tabla.delContexto();
     }
-
+    
     /**
      * Se invoca al salir de una declaración de variable.
      * <p>
@@ -152,8 +154,6 @@ public class Escucha extends compiladoresBaseListener {
      * Si la variable es válida, crea un objeto {@link Variable} con su información
      * (nombre, tipo, inicialización) y lo añade a la tabla de símbolos.
      * </p>
-     *
-     * @param ctx el contexto del nodo {@code declaracion} del árbol sintáctico
      */
     @Override
     public void exitDeclaracion(DeclaracionContext ctx) {
@@ -168,11 +168,9 @@ public class Escucha extends compiladoresBaseListener {
             nuevaVariable.setNombre(nombre);
             nuevaVariable.setTipoDato(tipo);
             nuevaVariable.setInicializado(!ctx.getChild(2).getText().isBlank());
-            nuevaVariable.setUsado(false);
-    
             tabla.addSimbolo(nombre, nuevaVariable);
         } else {
-            System.out.println("Error semantico: Doble declaracion del mismo identificador (Linea: " + ctx.getStart().getLine() + ")");
+            reportador.error("Error semantico: Doble declaracion del mismo identificador", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
             errors++;
         }
     }
@@ -183,7 +181,6 @@ public class Escucha extends compiladoresBaseListener {
      * Valida que la función no esté declarada previamente en el contexto local
      * (evita doble declaración). Si es válida, crea un objeto {@link Funcion}
      * con su información (nombre, tipo de retorno) y lo añade a la tabla de símbolos.
-     * </p>
      * <p>
      * Los prototipos son declaraciones adelantadas (forward declarations) que permiten
      * usar funciones antes de su definición completa.
@@ -198,19 +195,15 @@ public class Escucha extends compiladoresBaseListener {
 
         String nombre = ctx.ID().getText();
 
-        if (tabla.contieneSimboloLocal(nombre) == false) {
+        if (!tabla.contieneSimboloLocal(nombre)) {
             Funcion nuevaFuncion = new Funcion();
-
             String tipo = ctx.getChild(0).getText();
-
             nuevaFuncion.setNombre(nombre);
             nuevaFuncion.setTipoDato(tipo);
             nuevaFuncion.setUsado(false);
-
             tabla.addSimbolo(nombre, nuevaFuncion);
-        }
-        else {
-            System.out.println("Error semantico: Doble declaracion del mismo identificador (Linea: " + ctx.getStart().getLine() + ")");
+        } else {
+            reportador.error("Error semantico: Doble declaracion del mismo identificador", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
             errors++;
         }
     }
@@ -227,7 +220,6 @@ public class Escucha extends compiladoresBaseListener {
      * incluye el cuerpo (implementación) de la función.
      * </p>
      *
-     * @param ctx el contexto del nodo {@code declaracionfunc} del árbol sintáctico
      * @see #exitPrototipofunc(PrototipofuncContext)
      */
     @Override
@@ -236,7 +228,7 @@ public class Escucha extends compiladoresBaseListener {
 
         String nombre = ctx.ID().getText();
 
-        if (tabla.contieneSimboloLocal(nombre) == false) {
+        if (!tabla.contieneSimboloLocal(nombre)) {
             Funcion nuevaFuncion = new Funcion();
 
             String tipo = ctx.getChild(0).getText();
@@ -246,9 +238,8 @@ public class Escucha extends compiladoresBaseListener {
             nuevaFuncion.setUsado(false);
 
             tabla.addSimbolo(nombre, nuevaFuncion);
-        }
-        else {
-            System.out.println("Error semantico: Doble declaracion del mismo identificador (Linea: " + ctx.getStart().getLine() + ")");
+        } else {
+            reportador.error("Error semantico: Doble declaracion del mismo identificador", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
             errors++;
         }
     }
@@ -278,7 +269,7 @@ public class Escucha extends compiladoresBaseListener {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
                 // La variable destino debe estar declarada previamente
-                System.out.println("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;           
             } else {
                 // La variable destino está siendo asignada, marcarla como inicializada.
@@ -307,11 +298,11 @@ public class Escucha extends compiladoresBaseListener {
         if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
-                System.out.println("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;             
             }
             else if (simbolo != null && simbolo.getInicializado() == false) {
-                System.out.println("Error semantico: Uso de un identificador no inicializado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             }
         }  
@@ -332,11 +323,11 @@ public class Escucha extends compiladoresBaseListener {
        if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
-                System.out.println("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;             
             }
             else if (simbolo != null && simbolo.getInicializado() == false) {
-                System.out.println("Error semantico: Uso de un identificador no inicializado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             }
         } 
@@ -359,11 +350,11 @@ public class Escucha extends compiladoresBaseListener {
         if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
-                System.out.println("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;             
             }
             else if (simbolo != null && simbolo.getInicializado() == false) {
-                System.out.println("Error semantico: Uso de un identificador no inicializado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             }
         } 
@@ -386,11 +377,11 @@ public class Escucha extends compiladoresBaseListener {
         if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
-                System.out.println("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;             
             }
             else if (simbolo != null && simbolo.getInicializado() == false) {
-                System.out.println("Error semantico: Uso de un identificador no inicializado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             }
         } 
@@ -413,11 +404,11 @@ public class Escucha extends compiladoresBaseListener {
        if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
-                System.out.println("Error semantico: Uso de un identificador no declarado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;             
             }
             else if (simbolo != null && simbolo.getInicializado() == false) {
-                System.out.println("Error semantico: Uso de un identificador no inicializado (Linea: " + ctx.getStart().getLine() + ")");
+                reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             }
         } 

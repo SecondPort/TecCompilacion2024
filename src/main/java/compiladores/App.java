@@ -147,6 +147,9 @@ public class App {
         System.out.println("\n--- Iniciando generación de código ensamblador ---");
         GeneradorAssembler generador = new GeneradorAssembler("salida/programa.asm");
         generador.visit(tree);
-        
+
+        // Fase 10: Imprimir mensajes recopilados por el reportador
+        System.out.println("\n--- Mensajes del compilador ---");
+        Reportador.getInstancia().imprimirEnConsola();
     }
 }
