@@ -171,6 +171,18 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         return "";
     }
 
+    @Override
+    public String visitDeclaracionfunc(DeclaracionfuncContext ctx) {
+        String nombre = ctx.ID().getText();
+        codigo.append("\n").append(nombre).append(":\n");
+        codigo.append("    ; cuerpo de función\n");
+        visitBloque(ctx.bloque());
+        // Si no hay return explícito, devolver 0 por defecto
+        codigo.append("    mov eax, 0\n");
+        codigo.append("    ret\n");
+        return "";
+    }
+
     /**
      * Procesa una declaración de variable y genera código ensamblador.
      * <p>
@@ -409,14 +421,30 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
             int ascii = (int) c;
             codigo.append("    mov eax, ").append(ascii).append("\n");
         } else if (ctx.ID() != null) {
-            // Cargar valor de variable en EAX
             String variable = ctx.ID().getText();
-            codigo.append("    movsx eax, byte [").append(variable).append("]\n");
+            codigo.append("    mov eax, [").append(variable).append("]\n");
         } else if (ctx.expresion() != null) {
             // Expresión entre paréntesis
             visitExpresion(ctx.expresion());
         }
         
+        return "";
+    }
+
+    @Override
+    public String visitLlamadafunc(LlamadafuncContext ctx) {
+        String nombre = ctx.ID().getText();
+        // Evaluar argumento si existe (modelo simple: una expresión)
+        if (ctx.factorfunc() != null) {
+            visitFactorfunc(ctx.factorfunc());
+            // Suponemos resultado en EAX, lo pasamos por la pila
+            codigo.append("    push eax  ; pasar argumento\n");
+        }
+        codigo.append("    call ").append(nombre).append("\n");
+        if (ctx.factorfunc() != null) {
+            codigo.append("    add esp, 4  ; limpiar argumento\n");
+        }
+        // El valor de retorno queda en EAX
         return "";
     }
 

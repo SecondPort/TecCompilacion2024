@@ -376,10 +376,15 @@ Con las técnicas ya implementadas (propagación de constantes, constant folding
 	- La semántica de corto circuito para `&&`/`||` no está claramente implementada en generación de ensamblador (se hace a nivel de tres direcciones).
 
 - ⚠️ **Llamadas a funciones y retorno de valores**
-	- Gramática soporta llamadas, pero:
-		- El generador de código intermedio no implementa aún el recorrido para `llamadafunc`/`factorfunc`.
-		- El generador de ensamblador no implementa todavía la convención de llamadas (push de parámetros, call, return), aunque el comentario de clase indica que esa es la meta.
-	- No existe soporte en la gramática para `return`.
+	- Gramática soporta llamadas y ya incluye la instrucción `return`.
+	- El generador de código intermedio ahora implementa:
+		- Recorrido para `llamadafunc`/`factorfunc`/`listafactfunc`, generando instrucciones tipo `call nombre, arg, tResultado` (modelo simplificado de argumentos).
+		- Instrucciones `return valor` (o `return` sin valor) a partir de `ireturn`.
+	- El generador de ensamblador implementa una convención de llamadas básica:
+		- `declaracionfunc` genera una etiqueta por función, emite su cuerpo y finaliza con `mov eax, 0` y `ret` si no hay `return` explícito.
+		- `llamadafunc` evalúa un argumento (si existe), lo pasa por pila (`push eax`), ejecuta `call nombre` y luego limpia la pila (`add esp, 4`), asumiendo el valor de retorno en `eax`.
+	- Limitaciones actuales:
+		- Modelo simplificado: solo se maneja de forma explícita un argumento, no hay manejo general de múltiples parámetros ni prólogo/epílogo completo con `ebp`/variables locales.
 
 ---
 

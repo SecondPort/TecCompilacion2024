@@ -241,5 +241,56 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
         instrucciones.add(new Instruccion(op, left, right, temp));
         return temp;
     }
+
+    @Override
+    public String visitLlamadafunc(LlamadafuncContext ctx) {
+        String nombre = ctx.ID().getText();
+        String resultado = newTemp();
+        String argsTemp = visit(ctx.factorfunc());
+        instrucciones.add(new Instruccion("call", nombre, argsTemp, resultado));
+        return resultado;
+    }
+
+    @Override
+    public String visitFactorfunc(FactorfuncContext ctx) {
+        // Por simplicidad, devolvemos el último argumento evaluado (o vacío si no hay)
+        if (ctx.NUMERO() != null) {
+            return ctx.NUMERO().getText();
+        }
+        if (ctx.ID() != null) {
+            return ctx.ID().getText();
+        }
+        if (ctx.expresion() != null) {
+            return visit(ctx.expresion());
+        }
+        if (ctx.listafactfunc() != null) {
+            return visit(ctx.listafactfunc());
+        }
+        return "";
+    }
+
+    @Override
+    public String visitListafactfunc(ListafactfuncContext ctx) {
+        if (ctx.NUMERO() != null) {
+            return ctx.NUMERO().getText();
+        }
+        if (ctx.ID() != null) {
+            return ctx.ID().getText();
+        }
+        if (ctx.expresion() != null) {
+            return visit(ctx.expresion());
+        }
+        return "";
+    }
+
+    @Override
+    public String visitIreturn(IreturnContext ctx) {
+        String valor = "";
+        if (ctx.expresion() != null) {
+            valor = visit(ctx.expresion());
+        }
+        instrucciones.add(new Instruccion("return", valor, null, null));
+        return null;
+    }
 }
 

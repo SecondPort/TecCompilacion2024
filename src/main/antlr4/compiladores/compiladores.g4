@@ -36,6 +36,7 @@ WHILE : 'while';
 FOR : 'for';
 BREAK : 'break';
 CONTINUE : 'continue';
+RETURN : 'return';
 
 NUMERO : DIGITO+ ;
 
@@ -62,6 +63,7 @@ instruccion : declaracion
 |             prototipofunc
 |             declaracionfunc
 |             llamadafunc
+|             ireturn
 ;
 
 declaracion : tipo ID inicializacion listaid PYC ;
@@ -147,6 +149,8 @@ prototipofunc : tipofunc ID PA idfunc PC PYC ;
 declaracionfunc : tipofunc ID PA idfunc PC bloque ;
 
 llamadafunc : ID PA factorfunc PC PYC ;
+
+ireturn : RETURN expresion? PYC ;
 
 tipofunc : INT
 |          DOUBLE 
