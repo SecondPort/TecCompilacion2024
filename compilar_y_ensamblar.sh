@@ -19,7 +19,7 @@ echo -e "${BLUE}   Generador de Código Ensamblador${NC}"
 echo -e "${BLUE}========================================${NC}\n"
 
 # Archivo de entrada
-ARCHIVO_ENTRADA="${1:-entrada/test_aritmetica.txt}"
+ARCHIVO_ENTRADA="${1:-entrada/programa_corregido.txt}"
 
 if [ ! -f "$ARCHIVO_ENTRADA" ]; then
     echo -e "${RED}Error: El archivo $ARCHIVO_ENTRADA no existe${NC}"
@@ -40,11 +40,11 @@ fi
 
 # Fase 2: Ejecutar el compilador
 echo -e "${GREEN}[2/5] Ejecutando compilador...${NC}"
-mvn exec:java -Dexec.mainClass="compiladores.App" -q 2>&1 | grep -v "INFO\|WARNING"
-if [ -f "salida/programa.asm" ]; then
+mvn exec:java -Dexec.mainClass="compiladores.App" -Dexec.args="$ARCHIVO_ENTRADA" -q
+if [ $? -eq 0 ] && [ -f "salida/programa.asm" ]; then
     echo -e "${GREEN}✓ Código ensamblador generado${NC}\n"
 else
-    echo -e "${RED}✗ No se generó el código ensamblador${NC}"
+    echo -e "${RED}✗ Error ejecutando el compilador o no se generó el código ensamblador${NC}"
     exit 1
 fi
 
