@@ -76,6 +76,9 @@ public class App {
 
         // Fase 2: Crear el lexer que analiza el CharStream y produce tokens
         compiladoresLexer lexer = new compiladoresLexer(input);
+        // Reemplazar listeners por defecto con uno léxico personalizado
+        lexer.removeErrorListeners();
+        lexer.addErrorListener(new LexerErrorListener());
         
         // Fase 3: Crear un buffer de tokens generados por el lexer
         // Este buffer permite al parser consumir tokens según sea necesario
@@ -83,6 +86,9 @@ public class App {
 
         // Fase 4: Crear el parser que consume tokens y construye el árbol sintáctico
         compiladoresParser parser = new compiladoresParser(tokens);
+        // Reemplazar listeners por defecto con uno sintáctico personalizado
+        parser.removeErrorListeners();
+        parser.addErrorListener(new ParserErrorListener());
 
         // (Opcional) Generar tabla de tokens a archivo
         try (PrintWriter tokenOut = new PrintWriter("doc/Tokens.txt")) {

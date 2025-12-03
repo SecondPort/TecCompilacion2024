@@ -20,8 +20,6 @@ _start:
     mov byte [c], 97
 
     ; Estructura FOR
-    ; Inicialización de i
-    mov dword [i], 0
 L0:
     mov eax, [i]
     push eax

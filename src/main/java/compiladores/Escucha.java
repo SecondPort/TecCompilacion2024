@@ -314,11 +314,13 @@ public class Escucha extends compiladoresBaseListener {
             if (simbolo == null) {
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;             
-            }
-            else if (simbolo != null && simbolo.getInicializado() == false) {
-                reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;
             } else {
+                if (Boolean.FALSE.equals(simbolo.getInicializado())
+                        && !(ctx.getParent() instanceof compiladoresParser.AsignacionContext
+                             && ((compiladoresParser.AsignacionContext) ctx.getParent()).ID() == ctx.ID())) {
+                    reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                }
                 simbolo.setUsado(true);
             }
         }  

@@ -168,7 +168,7 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
     @Override
     public String visitIfor(IforContext ctx) {
         // ifor : FOR ciclo bloque ;
-        // ciclo : PA declaracion comparacion PYC finfor PC ;
+        // ciclo : PA (declaracion | asignacion) comparacion PYC finfor PC ;
         
         // We need to decompose 'ciclo' manually or visit it
         // Structure: init -> labelStart -> cond -> if true goto labelBody, else goto labelEnd
@@ -176,7 +176,13 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
         // labelEnd
         
         CicloContext ciclo = ctx.ciclo();
-        visit(ciclo.declaracion()); // Init
+
+        // Inicialización: puede ser una declaración o una asignación
+        if (ciclo.declaracion() != null) {
+            visit(ciclo.declaracion());
+        } else if (ciclo.asignacion() != null) {
+            visit(ciclo.asignacion());
+        }
 
         String labelStart = newLabel();
         String labelTrue = newLabel();

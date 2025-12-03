@@ -137,7 +137,8 @@ listacomp : AND comparacion listacomp
 
 ifor : FOR ciclo bloque ;
 
-ciclo : PA declaracion comparacion PYC finfor PC ;
+// Permite tanto una declaración como una asignación inicial en el for
+ciclo : PA (declaracion | asignacion) comparacion PYC finfor PC ;
 
 finfor : expresion
 |        ID INCREMENTO
