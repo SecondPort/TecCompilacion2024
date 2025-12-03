@@ -125,7 +125,74 @@ public class Optimizador {
                 }
             }
         }
+        // Pasada final: eliminación de código muerto sobre la lista ya optimizada
+        eliminarCodigoMuerto(optimizadas);
         return optimizadas;
+    }
+
+    /**
+     * Elimina instrucciones cuyo resultado nunca se usa posteriormente.
+     * <p>
+     * Recorre la lista de instrucciones de atrás hacia adelante y mantiene
+     * un conjunto de variables "vivas" (live). Si una instrucción asigna a
+     * una variable que no está viva y que parece un temporal (por ejemplo,
+     * nombres que comienzan con {@code "t"}), la instrucción se considera
+     * código muerto y se elimina.
+     * </p>
+     * <p>
+     * Las instrucciones de control de flujo (labels, if, goto, call, return)
+     * nunca se eliminan por seguridad, aun si su resultado es un temporal.
+     * </p>
+     *
+     * @param instrucciones lista de instrucciones ya optimizadas sobre la que
+     *                      se aplicará eliminación de código muerto in-place
+     */
+    private void eliminarCodigoMuerto(List<Instruccion> instrucciones) {
+        java.util.Set<String> vivos = new java.util.HashSet<>();
+
+        for (int i = instrucciones.size() - 1; i >= 0; i--) {
+            Instruccion inst = instrucciones.get(i);
+
+            String op = inst.op;
+            String arg1 = inst.arg1;
+            String arg2 = inst.arg2;
+            String result = inst.result;
+
+            // 1) Cualquier uso de variables las marca como vivas
+            if (arg1 != null && !arg1.isEmpty()) {
+                vivos.add(arg1);
+            }
+            if (arg2 != null && !arg2.isEmpty()) {
+                vivos.add(arg2);
+            }
+
+            // 2) Determinar si esta instrucción puede eliminarse
+            boolean esControlFlujo =
+                op.equals("label") ||
+                op.equals("goto") ||
+                op.equals("if") ||
+                op.equals("return") ||
+                op.equals("call");
+
+            boolean esAsignacion = !esControlFlujo && result != null && !result.isEmpty();
+
+            if (esAsignacion) {
+                boolean resultadoVivo = vivos.contains(result);
+
+                // Heurística: solo eliminamos si el resultado nunca se usa
+                // y parece ser un temporal (por ejemplo, t0, t1, ...).
+                boolean esTemporal = result.startsWith("t");
+
+                if (!resultadoVivo && esTemporal) {
+                    instrucciones.remove(i);
+                    continue; // No actualizamos "vivos" con este resultado
+                }
+
+                // Si la instrucción permanece, el resultado se define aquí y
+                // deja de ser necesario como "vivo" antes de este punto.
+                vivos.remove(result);
+            }
+        }
     }
 
     private boolean isNumeric(String s) {
