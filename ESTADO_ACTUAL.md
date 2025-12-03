@@ -221,9 +221,9 @@ La descripción se organiza por secciones del enunciado.
 		- `visitIreturn` genera una instrucción `return valor` (o `return` sin valor) que modela la salida de una función.
 	- Limitación actual: el modelo de argumentos es simplificado (no hay una representación estructurada de múltiples parámetros) y todavía no se enlazan directamente estas instrucciones con una semántica de tipos de retorno.
 
-- ⚠️ **Integración en el flujo principal**
-	- Existe la clase `GeneradorCodigoIntermedio`, pero **`App.java` actualmente no la usa** (está comentado el uso de `Caminante` y no aparece una invocación directa al generador intermedio).
-	- No hay escritura a archivo tipo `doc/CodigoIntermedio.txt` de la lista de instrucciones generadas.
+- ✅ **Integración en el flujo principal**
+	- `App.java` instancia `GeneradorCodigoIntermedio`, visita el `ParseTree` y obtiene una lista de instrucciones intermedias.
+	- Esa lista se escribe sistemáticamente en `salida/codigo_intermedio.txt` en cada ejecución del compilador.
 
 **Qué falta para cumplir totalmente esta sección:**
 
@@ -362,9 +362,9 @@ Con las técnicas ya implementadas (propagación de constantes, constant folding
 	- Los literales `char` se manejan como enteros (códigos ASCII) tanto en código intermedio (como lexema de `CHAR_CONST`) como en ensamblador (carga del ASCII en `EAX` y almacenamiento en variables `char`).
 	- La semántica de corto circuito para `&&`/`||` no está claramente implementada en generación de ensamblador (se hace a nivel de tres direcciones).
 
-- ⚠️ **Llamadas a funciones y retorno de valores**
+- ✅/⚠️ **Llamadas a funciones y retorno de valores**
 	- Gramática soporta llamadas y ya incluye la instrucción `return`.
-	- El generador de código intermedio ahora implementa:
+	- El generador de código intermedio implementa:
 		- Recorrido para `llamadafunc`/`factorfunc`/`listafactfunc`, generando instrucciones tipo `call nombre, arg, tResultado` (modelo simplificado de argumentos).
 		- Instrucciones `return valor` (o `return` sin valor) a partir de `ireturn`.
 	- El generador de ensamblador implementa una convención de llamadas básica:
@@ -385,22 +385,11 @@ Con las técnicas ya implementadas (propagación de constantes, constant folding
 	- ✔ Un **generador de código ensamblador NASM** funcional para int/double, if/while/for.
 
 - Lo que falta para alinear completamente con el enunciado:
-	- Integrar de forma ordenada el **pipeline completo** en `App.java`:
-		1) Análisis léxico + tabla de tokens.
-		2) Análisis sintáctico + árbol (y opcionalmente AST).
-		3) Análisis semántico (tipos, funciones, ámbitos, warnings).
-		4) Generación de código intermedio.
-		5) Optimización de código intermedio.
-		6) Generación de ensamblador (opcional pero ya existente).
-	- Implementar un **sistema unificado de reporte de errores y warnings con colores**.
-	- Completar soporte del subconjunto de C++ pedido:
-		- Tipo `char`.
-		- `break` y `continue`.
-		- `return` y manejo completo de funciones.
-	- Escribir sistemáticamente:
-		- Un archivo con la **tabla de tokens**.
-		- Un archivo con **código intermedio**.
-		- Un archivo con **código intermedio optimizado**.
+	- (Opcional) Definir un **AST propio** si se requiere explícitamente, ya que actualmente se trabaja solo con el `ParseTree` de ANTLR.
+	- Implementar un **ErrorListener léxico y sintáctico** personalizados, integrados al sistema de mensajes centralizado.
+	- Completar el **sistema de tipos** y la **semántica de funciones** (tipos de retorno, parámetros, compatibilidad de tipos, verificación de `return` en todas las rutas de funciones no `void`).
+	- Extender el sistema de reporte para soportar **colores ANSI** en consola (verde/amarillo/rojo) y, si se desea, volcados adicionales de mensajes a archivo.
+	- (Opcional) Añadir optimizaciones adicionales, como **eliminación de código muerto** y optimizaciones específicas de bucles.
 
 Este documento refleja el estado actual a la fecha indicada y sirve como guía de trabajo para las siguientes iteraciones del proyecto.
 
