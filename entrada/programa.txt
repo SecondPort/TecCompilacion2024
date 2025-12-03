@@ -1,9 +1,26 @@
+int a;
+int b = 5;
+char c = 'z';
+
+a = 3;
+b = b + a;
+
+if (a == 3) {
+	b = b + 1;
+} else {
+	b = b - 1;
+}
+
+while (a < 10 && b < 20) {
+	a = a + 1;
+}
+
 int i;
 int suma = 0;
-char c = 'a';
+char ch = 'a';
 
 for (i = 0; i < 10; i++) {
-	if (i == 3) {
+	if (i == 2) {
 		continue;
 	}
 	if (i == 7) {
@@ -11,3 +28,44 @@ for (i = 0; i < 10; i++) {
 	}
 	suma = suma + i;
 }
+
+int f(int x, int y);
+int g(int);
+void h();
+
+int f(int x, int y) {
+	int r = 0;
+	r = x + y;
+	return r;
+}
+
+int g(int p) {
+	return p;
+}
+
+void h() {
+	int local = 1;
+	local = local + 1;
+	return;
+}
+
+int res;
+res = f(a, b);
+res = g(res);
+
+x = 10;
+
+int a;
+
+int noInit;
+if (noInit == 0) {
+	noInit = 1;
+}
+
+int otro;
+b = b + otro;
+
+break;
+continue;
+
+int f(int x);

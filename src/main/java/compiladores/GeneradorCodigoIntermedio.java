@@ -62,17 +62,21 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
     @Override
     public String visitExpresion(ExpresionContext ctx) {
+        if (ctx == null || ctx.termino() == null) {
+            return "";
+        }
         String left = visit(ctx.termino());
         return processExp(ctx.exp(), left);
     }
 
     private String processExp(ExpContext ctx, String left) {
-        if (ctx.getChildCount() == 0) return left;
+        if (ctx == null || ctx.getChildCount() == 0) return left;
         
         String op = "";
         if (ctx.SUMA() != null) op = "+";
         else if (ctx.RESTA() != null) op = "-";
         
+        if (ctx.termino() == null) return left;
         String right = visit(ctx.termino());
         String temp = newTemp();
         instrucciones.add(new Instruccion(op, left, right, temp));
@@ -82,18 +86,22 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
     @Override
     public String visitTermino(TerminoContext ctx) {
+        if (ctx == null || ctx.factor() == null) {
+            return "";
+        }
         String left = visit(ctx.factor());
         return processTerm(ctx.term(), left);
     }
 
     private String processTerm(TermContext ctx, String left) {
-        if (ctx.getChildCount() == 0) return left;
+        if (ctx == null || ctx.getChildCount() == 0) return left;
 
         String op = "";
         if (ctx.MULT() != null) op = "*";
         else if (ctx.DIV() != null) op = "/";
         else if (ctx.MOD() != null) op = "%";
 
+        if (ctx.factor() == null) return left;
         String right = visit(ctx.factor());
         String temp = newTemp();
         instrucciones.add(new Instruccion(op, left, right, temp));

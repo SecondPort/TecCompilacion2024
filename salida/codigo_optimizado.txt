@@ -1,23 +1,66 @@
-i = 0
+a = 3
+t0 = b + 3
+b = t0
+t1 = 1
+if t1 goto l0
+goto l1
 l0:
-t0 = i < 10
-if t0 goto l1
+t2 = b + 1
+b = t2
 goto l2
 l1:
-t1 = i == 3
-if t1 goto l3
-goto l4
-l3:
-goto l0
-l4:
-t2 = i == 7
-if t2 goto l5
-goto l6
-l5:
-goto l2
-l6:
-t3 = suma + i
-suma = t3
-i = i + 1
-goto l0
+t3 = b - 1
+b = t3
 l2:
+l3:
+t4 = a < 10
+t5 = b < 20
+t6 = t4 && t5
+if t6 goto l4
+goto l5
+l4:
+t7 = a + 1
+a = t7
+goto l3
+l5:
+i = 0
+l6:
+t8 = i < 10
+if t8 goto l7
+goto l8
+l7:
+t9 = i == 2
+if t9 goto l9
+goto l10
+l9:
+goto l6
+l10:
+t10 = i == 7
+if t10 goto l11
+goto l12
+l11:
+goto l8
+l12:
+t11 = suma + i
+suma = t11
+i = i + 1
+goto l6
+l8:
+t12 = x + y
+r = t12
+null = return r
+null = return p
+t13 = local + 1
+local = t13
+return null
+res = f
+res = g
+x = 10
+t14 = noInit == 0
+if t14 goto l13
+goto l14
+l13:
+noInit = 1
+l14:
+t15 = b + otro
+b = t15
