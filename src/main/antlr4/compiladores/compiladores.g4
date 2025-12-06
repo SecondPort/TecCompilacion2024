@@ -22,6 +22,8 @@ EQ : '==';
 UEQ : '!=';
 MAYOR : '>';
 MENOR : '<';
+MAYORIGUAL : '>=';
+MENORIGUAL : '<=';
 INCREMENTO : '++';
 DECREMENTO : '--';
 AND : '&&';
@@ -38,7 +40,7 @@ BREAK : 'break';
 CONTINUE : 'continue';
 RETURN : 'return';
 
-NUMERO : DIGITO+ ;
+NUMERO : DIGITO+ ('.' DIGITO+)? ;
 
 CHAR_CONST : '\'' . '\'' ;
 
@@ -73,8 +75,7 @@ tipo : INT
 |      CHAR
 ;
 
-inicializacion : ASIGN NUMERO
-|                ASIGN CHAR_CONST
+inicializacion : ASIGN expresion
 |
 ;
 
@@ -84,26 +85,32 @@ listaid : COMA ID inicializacion listaid
 
 asignacion : ID ASIGN expresion PYC ;
 
-expresion : termino exp ;
+expresion
+	: expresion SUMA expresion
+	| expresion RESTA expresion
+	| expresion MULT expresion
+	| expresion DIV expresion
+	| expresion MOD expresion
+	| expresion EQ expresion
+	| expresion UEQ expresion
+	| expresion MAYOR expresion
+	| expresion MENOR expresion
+	| expresion MAYORIGUAL expresion
+	| expresion MENORIGUAL expresion
+	| expresion AND expresion
+	| expresion OR expresion
+	| RESTA expresion           // unario -
+	| '!' expresion            // unario !
+	| factor
+	;
 
-termino : factor term ;
-
-exp : SUMA termino exp
-|     RESTA termino exp
-|
-;
-
-term : MULT factor term
-|      DIV factor term
-|      MOD factor term
-|
-;
-
-factor : NUMERO
-|        CHAR_CONST
-|        ID
-|        PA expresion PC
-;
+factor
+	: NUMERO
+	| CHAR_CONST
+	| ID
+	| PA expresion PC
+	| llamada_expr
+	;
 
 bloque : LLA instrucciones LLC ;
 
@@ -120,41 +127,35 @@ ibreak : BREAK PYC ;
 
 icontinue : CONTINUE PYC ;
 
-condicion : PA comparacion listacomp PC ;
-
-comparacion : factor comp factor ;
-
-comp : EQ
-|      UEQ
-|      MAYOR
-|      MENOR
-;
-
-listacomp : AND comparacion listacomp 
-|           OR comparacion listacomp
-|
-;
+condicion : PA expresion PC ;
 
 ifor : FOR ciclo bloque ;
 
 // Permite tanto una declaración como una asignación inicial en el for
-ciclo : PA (declaracion | asignacion) comparacion PYC finfor PC ;
+// y una expresión general (estilo C) en la parte central
+ciclo : PA (declaracion | asignacion) expresion PYC finfor PC ;
 
 finfor : expresion
 |        ID INCREMENTO
 |        ID DECREMENTO
+|        ID ASIGN expresion
 ;
 
 prototipofunc : tipofunc ID PA idfunc PC PYC ;
 
 declaracionfunc : tipofunc ID PA idfunc PC bloque ;
 
-llamadafunc : ID PA factorfunc PC PYC ;
+// Llamada usada como sentencia (termina en ';')
+llamadafunc : llamada_expr PYC ;
+
+// Llamada usada como expresión/factor (sin ';')
+llamada_expr : ID PA factorfunc PC ;
 
 ireturn : RETURN expresion? PYC ;
 
 tipofunc : INT
 |          DOUBLE 
+|          CHAR
 |          VOID
 ;
 

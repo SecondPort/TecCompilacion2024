@@ -425,8 +425,8 @@ public class Escucha extends compiladoresBaseListener {
     @Override
     public void exitLlamadafunc(LlamadafuncContext ctx) {
         super.exitLlamadafunc(ctx);
-       if (ctx.ID() != null) {
-            Id simbolo = tabla.getSimbolo(ctx.ID().getText());
+       if (ctx.llamada_expr() != null && ctx.llamada_expr().ID() != null) {
+            Id simbolo = tabla.getSimbolo(ctx.llamada_expr().ID().getText());
             if (simbolo == null) {
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;             

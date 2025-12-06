@@ -62,51 +62,56 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
     @Override
     public String visitExpresion(ExpresionContext ctx) {
-        if (ctx == null || ctx.termino() == null) {
+        if (ctx == null) {
             return "";
         }
-        String left = visit(ctx.termino());
-        return processExp(ctx.exp(), left);
-    }
 
-    private String processExp(ExpContext ctx, String left) {
-        if (ctx == null || ctx.getChildCount() == 0) return left;
-        
-        String op = "";
-        if (ctx.SUMA() != null) op = "+";
-        else if (ctx.RESTA() != null) op = "-";
-        
-        if (ctx.termino() == null) return left;
-        String right = visit(ctx.termino());
-        String temp = newTemp();
-        instrucciones.add(new Instruccion(op, left, right, temp));
-        
-        return processExp(ctx.exp(), temp);
-    }
-
-    @Override
-    public String visitTermino(TerminoContext ctx) {
-        if (ctx == null || ctx.factor() == null) {
-            return "";
+        // Caso unario -expr
+        if (ctx.RESTA() != null && ctx.expresion().size() == 1) {
+            String valor = visit(ctx.expresion(0));
+            String cero = "0";
+            String temp = newTemp();
+            instrucciones.add(new Instruccion("-", cero, valor, temp));
+            return temp;
         }
-        String left = visit(ctx.factor());
-        return processTerm(ctx.term(), left);
-    }
 
-    private String processTerm(TermContext ctx, String left) {
-        if (ctx == null || ctx.getChildCount() == 0) return left;
+        // Caso binario: expr op expr
+        if (ctx.expresion().size() == 2) {
+            String left = visit(ctx.expresion(0));
+            String right = visit(ctx.expresion(1));
+            String op = ctx.SUMA() != null ? "+" :
+                        ctx.RESTA() != null ? "-" :
+                        ctx.MULT() != null ? "*" :
+                        ctx.DIV() != null ? "/" :
+                        ctx.MOD() != null ? "%" :
+                        ctx.EQ() != null ? "==" :
+                        ctx.UEQ() != null ? "!=" :
+                        ctx.MAYOR() != null ? ">" :
+                        ctx.MENOR() != null ? "<" :
+                        ctx.MAYORIGUAL() != null ? ">=" :
+                        ctx.MENORIGUAL() != null ? "<=" :
+                        ctx.AND() != null ? "&&" :
+                        ctx.OR() != null ? "||" : "";
 
-        String op = "";
-        if (ctx.MULT() != null) op = "*";
-        else if (ctx.DIV() != null) op = "/";
-        else if (ctx.MOD() != null) op = "%";
+            String temp = newTemp();
+            instrucciones.add(new Instruccion(op, left, right, temp));
+            return temp;
+        }
 
-        if (ctx.factor() == null) return left;
-        String right = visit(ctx.factor());
-        String temp = newTemp();
-        instrucciones.add(new Instruccion(op, left, right, temp));
-        
-        return processTerm(ctx.term(), temp);
+        // Caso !expr (unario lógico)
+        if (ctx.getChildCount() == 2 && ctx.getChild(0).getText().equals("!")) {
+            String valor = visit(ctx.expresion(0));
+            String temp = newTemp();
+            instrucciones.add(new Instruccion("!", valor, null, temp));
+            return temp;
+        }
+
+        // Caso base: factor
+        if (ctx.factor() != null) {
+            return visit(ctx.factor());
+        }
+
+        return "";
     }
 
     @Override
@@ -114,6 +119,7 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
         if (ctx.NUMERO() != null) return ctx.NUMERO().getText();
         if (ctx.CHAR_CONST() != null) return ctx.CHAR_CONST().getText();
         if (ctx.ID() != null) return ctx.ID().getText();
+        if (ctx.llamada_expr() != null) return visit(ctx.llamada_expr());
         if (ctx.expresion() != null) return visit(ctx.expresion());
         return "";
     }
@@ -201,9 +207,8 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
         instrucciones.add(new Instruccion("label", null, null, labelStart));
 
-        // Condición (comparacion)
-        // comparacion returns a temp
-        String cond = visit(ciclo.comparacion());
+        // Condición general: la parte central del for es una expresion
+        String cond = visit(ciclo.expresion());
 
         instrucciones.add(new Instruccion("if", cond, null, labelTrue));
         instrucciones.add(new Instruccion("goto", null, null, labelEnd));
@@ -242,54 +247,48 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
     // Helper for for-loop update step
     @Override
     public String visitFinfor(FinforContext ctx) {
-        if (ctx.expresion() != null) {
+        // Caso 1: expresión genérica como actualización (se evalúa y se descarta)
+        if (ctx.expresion() != null && ctx.ASIGN() == null && ctx.ID() == null) {
             return visit(ctx.expresion());
         }
-        // ID INCREMENTO | ID DECREMENTO
-        String id = ctx.ID().getText();
-        String op = ctx.INCREMENTO() != null ? "+" : "-";
-        // x = x + 1
-        instrucciones.add(new Instruccion(op, id, "1", id));
-        return id;
+
+        // Caso 2: ID++ o ID--
+        if (ctx.ID() != null && (ctx.INCREMENTO() != null || ctx.DECREMENTO() != null) && ctx.ASIGN() == null) {
+            String id = ctx.ID().getText();
+            String op = ctx.INCREMENTO() != null ? "+" : "-";
+            instrucciones.add(new Instruccion(op, id, "1", id));
+            return id;
+        }
+
+        // Caso 3: asignación tipo ID = expresion
+        if (ctx.ID() != null && ctx.ASIGN() != null && ctx.expresion() != null) {
+            String id = ctx.ID().getText();
+            String val = visit(ctx.expresion());
+            instrucciones.add(new Instruccion("=", val, null, id));
+            return id;
+        }
+
+        return "";
     }
 
     @Override
     public String visitCondicion(CondicionContext ctx) {
-        if (ctx == null || ctx.comparacion() == null) {
+        if (ctx == null || ctx.expresion() == null) {
             return "";
         }
-        String left = visit(ctx.comparacion());
-        return processListaComp(ctx.listacomp(), left);
-    }
-    
-    private String processListaComp(ListacompContext ctx, String left) {
-        if (ctx == null || ctx.getChildCount() == 0) return left;
-        
-        String op = "";
-        if (ctx.AND() != null) op = "&&";
-        else if (ctx.OR() != null) op = "||";
-        
-        if (ctx.comparacion() == null) return left;
-        String right = visit(ctx.comparacion());
-        String temp = newTemp();
-        instrucciones.add(new Instruccion(op, left, right, temp));
-        
-        return processListaComp(ctx.listacomp(), temp);
-    }
-
-    @Override
-    public String visitComparacion(ComparacionContext ctx) {
-        String left = visit(ctx.factor(0));
-        String right = visit(ctx.factor(1));
-        String op = ctx.comp().getText();
-        
-        String temp = newTemp();
-        instrucciones.add(new Instruccion(op, left, right, temp));
-        return temp;
+        return visit(ctx.expresion());
     }
 
     @Override
     public String visitLlamadafunc(LlamadafuncContext ctx) {
+        // llamadafunc ahora es una sentencia: llamada_expr PYC
+        String resultado = visit(ctx.llamada_expr());
+        // El valor de retorno queda en 'resultado', pero como sentencia no lo usamos
+        return null;
+    }
+
+    @Override
+    public String visitLlamada_expr(compiladoresParser.Llamada_exprContext ctx) {
         String nombre = ctx.ID().getText();
         String resultado = newTemp();
         String argsTemp = visit(ctx.factorfunc());

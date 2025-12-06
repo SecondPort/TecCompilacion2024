@@ -118,9 +118,14 @@ public final class TablaSimbolos {
      * @see #contieneSimbolo(String)
      */
     public void addSimbolo(String nombre, Id id) {    
-        if (!ts.isEmpty() && contieneSimbolo(nombre) == false) {
+        if (!ts.isEmpty()) {
             Map<String, Id> contextoActual = ts.get(ts.size() - 1);
-            contextoActual.put(nombre, id);
+            // Solo evitamos duplicados dentro del contexto actual.
+            // Otros contextos (externos) pueden tener el mismo nombre
+            // para permitir sombreado y reutilización en funciones distintas.
+            if (!contextoActual.containsKey(nombre)) {
+                contextoActual.put(nombre, id);
+            }
         }
     }
 

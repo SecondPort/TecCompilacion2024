@@ -234,18 +234,14 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
             variablesDeclaradas.add(nombre);
         }
         
-        // Si tiene inicialización, generar código de asignación
-        if (ctx.inicializacion() != null) {
-            if (ctx.inicializacion().NUMERO() != null) {
-                String valor = ctx.inicializacion().NUMERO().getText();
-                codigo.append("    ; Inicialización de ").append(nombre).append("\n");
-                codigo.append("    mov dword [").append(nombre).append("], ").append(valor).append("\n");
-            } else if (ctx.inicializacion().CHAR_CONST() != null) {
-                String lexema = ctx.inicializacion().CHAR_CONST().getText();
-                char c = lexema.charAt(1);
-                int ascii = (int) c;
-                codigo.append("    ; Inicialización de ").append(nombre).append(" (char)\n");
-                codigo.append("    mov byte [").append(nombre).append("], ").append(ascii).append("\n");
+        // Si tiene inicialización, generar código de asignación evaluando la expresion
+        if (ctx.inicializacion() != null && ctx.inicializacion().expresion() != null) {
+            codigo.append("    ; Inicialización de ").append(nombre).append("\n");
+            visitExpresion(ctx.inicializacion().expresion());
+            if ("char".equals(tipo)) {
+                codigo.append("    mov byte [").append(nombre).append("], al\n");
+            } else {
+                codigo.append("    mov dword [").append(nombre).append("], eax\n");
             }
         }
         
@@ -296,118 +292,95 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
      */
     @Override
     public String visitExpresion(ExpresionContext ctx) {
-        // Evaluar el término principal
-        visitTermino(ctx.termino());
-        
-        // Evaluar el resto de la expresión (suma/resta)
-        visitExp(ctx.exp());
-        
-        return "";
-    }
-
-    /**
-     * Procesa un término (multiplicación/división) en una expresión.
-     * <p>
-     * Los términos tienen mayor precedencia que las sumas y restas.
-     * </p>
-     *
-     * @param ctx el contexto del nodo {@code termino} del árbol sintáctico
-     * @return cadena vacía
-     */
-    @Override
-    public String visitTermino(TerminoContext ctx) {
-        // Evaluar el factor principal
-        visitFactor(ctx.factor());
-        
-        // Evaluar operaciones de multiplicación/división
-        visitTerm(ctx.term());
-        
-        return "";
-    }
-
-    /**
-     * Procesa operaciones de suma y resta en una expresión.
-     * <p>
-     * Genera código para operaciones binarias usando la pila para preservar
-     * el operando izquierdo mientras se evalúa el derecho.
-     * </p>
-     *
-     * @param ctx el contexto del nodo {@code exp} del árbol sintáctico
-     * @return cadena vacía
-     */
-    @Override
-    public String visitExp(ExpContext ctx) {
-        if (ctx.SUMA() != null) {
-            // Guardar el resultado actual en la pila
-            codigo.append("    push eax\n");
-            
-            // Evaluar el término derecho
-            visitTermino(ctx.termino());
-            
-            // Recuperar operando izquierdo y sumar
-            codigo.append("    mov ebx, eax\n");
-            codigo.append("    pop eax\n");
-            codigo.append("    add eax, ebx  ; suma\n");
-            
-            // Continuar con el resto de la expresión
-            visitExp(ctx.exp());
-        } else if (ctx.RESTA() != null) {
-            // Guardar el resultado actual en la pila
-            codigo.append("    push eax\n");
-            
-            // Evaluar el término derecho
-            visitTermino(ctx.termino());
-            
-            // Recuperar operando izquierdo y restar
-            codigo.append("    mov ebx, eax\n");
-            codigo.append("    pop eax\n");
-            codigo.append("    sub eax, ebx  ; resta\n");
-            
-            // Continuar con el resto de la expresión
-            visitExp(ctx.exp());
+        if (ctx == null) {
+            return "";
         }
-        
-        return "";
-    }
 
-    /**
-     * Procesa operaciones de multiplicación, división y módulo.
-     * <p>
-     * Genera código para operaciones de mayor precedencia usando
-     * instrucciones específicas de x86.
-     * </p>
-     *
-     * @param ctx el contexto del nodo {@code term} del árbol sintáctico
-     * @return cadena vacía
-     */
-    @Override
-    public String visitTerm(TermContext ctx) {
-        if (ctx.MULT() != null) {
-            codigo.append("    push eax\n");
-            visitFactor(ctx.factor());
-            codigo.append("    mov ebx, eax\n");
-            codigo.append("    pop eax\n");
-            codigo.append("    imul eax, ebx  ; multiplicación\n");
-            visitTerm(ctx.term());
-        } else if (ctx.DIV() != null) {
-            codigo.append("    push eax\n");
-            visitFactor(ctx.factor());
-            codigo.append("    mov ebx, eax\n");
-            codigo.append("    pop eax\n");
-            codigo.append("    cdq            ; extender signo para división\n");
-            codigo.append("    idiv ebx       ; división\n");
-            visitTerm(ctx.term());
-        } else if (ctx.MOD() != null) {
-            codigo.append("    push eax\n");
-            visitFactor(ctx.factor());
-            codigo.append("    mov ebx, eax\n");
-            codigo.append("    pop eax\n");
-            codigo.append("    cdq            ; extender signo\n");
-            codigo.append("    idiv ebx       ; división\n");
-            codigo.append("    mov eax, edx   ; módulo (resto en EDX)\n");
-            visitTerm(ctx.term());
+        // unario -expr
+        if (ctx.RESTA() != null && ctx.expresion().size() == 1) {
+            visitExpresion(ctx.expresion(0));
+            codigo.append("    neg eax\n");
+            return "";
         }
-        
+
+        // !expr
+        if (ctx.getChildCount() == 2 && ctx.getChild(0).getText().equals("!")) {
+            visitExpresion(ctx.expresion(0));
+            // eax = (eax == 0)
+            codigo.append("    cmp eax, 0\n");
+            codigo.append("    mov eax, 0\n");
+            codigo.append("    sete al\n");
+            return "";
+        }
+
+        // binario expr op expr
+        if (ctx.expresion().size() == 2) {
+            // Evaluar izquierda
+            visitExpresion(ctx.expresion(0));
+            codigo.append("    push eax\n");
+            // Evaluar derecha
+            visitExpresion(ctx.expresion(1));
+            codigo.append("    mov ebx, eax\n");
+            codigo.append("    pop eax\n");
+
+            if (ctx.SUMA() != null) {
+                codigo.append("    add eax, ebx\n");
+            } else if (ctx.RESTA() != null) {
+                codigo.append("    sub eax, ebx\n");
+            } else if (ctx.MULT() != null) {
+                codigo.append("    imul eax, ebx\n");
+            } else if (ctx.DIV() != null) {
+                codigo.append("    cdq\n");
+                codigo.append("    idiv ebx\n");
+            } else if (ctx.MOD() != null) {
+                codigo.append("    cdq\n");
+                codigo.append("    idiv ebx\n");
+                codigo.append("    mov eax, edx\n");
+            } else if (ctx.EQ() != null || ctx.UEQ() != null || ctx.MAYOR() != null || ctx.MENOR() != null
+                    || ctx.MAYORIGUAL() != null || ctx.MENORIGUAL() != null) {
+                codigo.append("    cmp eax, ebx\n");
+                codigo.append("    mov eax, 0\n");
+                if (ctx.EQ() != null) {
+                    codigo.append("    sete al\n");
+                } else if (ctx.UEQ() != null) {
+                    codigo.append("    setne al\n");
+                } else if (ctx.MAYOR() != null) {
+                    codigo.append("    setg al\n");
+                } else if (ctx.MENOR() != null) {
+                    codigo.append("    setl al\n");
+                } else if (ctx.MAYORIGUAL() != null) {
+                    codigo.append("    setge al\n");
+                } else if (ctx.MENORIGUAL() != null) {
+                    codigo.append("    setle al\n");
+                }
+            } else if (ctx.AND() != null) {
+                // AND lógico: (a && b) -> resultado 0/1
+                codigo.append("    cmp eax, 0\n");
+                codigo.append("    setne al\n");
+                codigo.append("    movzx eax, al\n");
+                codigo.append("    cmp ebx, 0\n");
+                codigo.append("    setne bl\n");
+                codigo.append("    movzx ebx, bl\n");
+                codigo.append("    and eax, ebx\n");
+            } else if (ctx.OR() != null) {
+                // OR lógico
+                codigo.append("    cmp eax, 0\n");
+                codigo.append("    setne al\n");
+                codigo.append("    movzx eax, al\n");
+                codigo.append("    cmp ebx, 0\n");
+                codigo.append("    setne bl\n");
+                codigo.append("    movzx ebx, bl\n");
+                codigo.append("    or eax, ebx\n");
+            }
+
+            return "";
+        }
+
+        // Caso base: factor
+        if (ctx.factor() != null) {
+            visitFactor(ctx.factor());
+        }
+
         return "";
     }
 
@@ -461,19 +434,9 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
      * @return cadena vacía
      */
     @Override
-    public String visitLlamadafunc(LlamadafuncContext ctx) {
-        String nombre = ctx.ID().getText();
-        // Evaluar argumento si existe (modelo simple: una expresión)
-        if (ctx.factorfunc() != null) {
-            visitFactorfunc(ctx.factorfunc());
-            // Suponemos resultado en EAX, lo pasamos por la pila
-            codigo.append("    push eax  ; pasar argumento\n");
-        }
-        codigo.append("    call ").append(nombre).append("\n");
-        if (ctx.factorfunc() != null) {
-            codigo.append("    add esp, 4  ; limpiar argumento\n");
-        }
-        // El valor de retorno queda en EAX
+    public String visitLlamadafunc(compiladoresParser.LlamadafuncContext ctx) {
+        // llamadafunc ahora es llamada_expr PYC
+        visit(ctx.llamada_expr());
         return "";
     }
 
@@ -630,9 +593,9 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         // 2. Etiqueta de inicio del bucle (ANTES de la condición)
         codigo.append(etiquetaInicio).append(":\n");
         
-        // 3. Evaluar condición (comparacion)
-        if (ciclo.comparacion() != null) {
-            visitComparacion(ciclo.comparacion());
+        // 3. Evaluar condición general (la parte central es una expresion)
+        if (ciclo.expresion() != null) {
+            visitExpresion(ciclo.expresion());
         }
         
         // 4. Saltar al final si la condición es falsa
@@ -739,44 +702,9 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
      */
     @Override
     public String visitCondicion(CondicionContext ctx) {
-        visitComparacion(ctx.comparacion());
-        // Las comparaciones adicionales (AND/OR) se procesarían aquí
-        return "";
-    }
-
-    /**
-     * Procesa una comparación entre dos valores.
-     * <p>
-     * Genera código que compara dos operandos y establece los flags apropiados
-     * del procesador para instrucciones de salto condicional.
-     * </p>
-     * <p>
-     * <b>Operadores soportados:</b>
-     * <ul>
-     *   <li>== (igual)</li>
-     *   <li>!= (diferente)</li>
-     *   <li>&gt; (mayor que)</li>
-     *   <li>&lt; (menor que)</li>
-     * </ul>
-     * </p>
-     *
-     * @param ctx el contexto del nodo {@code comparacion} del árbol sintáctico
-     * @return cadena vacía
-     */
-    @Override
-    public String visitComparacion(ComparacionContext ctx) {
-        // Evaluar el factor izquierdo
-        visitFactor((FactorContext) ctx.getChild(0));
-        codigo.append("    push eax\n");
-        
-        // Evaluar el factor derecho
-        visitFactor((FactorContext) ctx.getChild(2));
-        codigo.append("    mov ebx, eax\n");
-        codigo.append("    pop eax\n");
-        
-        // Realizar la comparación
-        codigo.append("    cmp eax, ebx  ; comparación\n");
-        
+        if (ctx != null && ctx.expresion() != null) {
+            visitExpresion(ctx.expresion());
+        }
         return "";
     }
 
