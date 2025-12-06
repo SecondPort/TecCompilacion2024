@@ -12,6 +12,8 @@ import compiladores.compiladoresParser.DeclaracionfuncContext;
 import compiladores.compiladoresParser.FactorContext;
 import compiladores.compiladoresParser.FactorfuncContext;
 import compiladores.compiladoresParser.FinforContext;
+import compiladores.compiladoresParser.IdfuncContext;
+import compiladores.compiladoresParser.ListaidfuncContext;
 import compiladores.compiladoresParser.ListafactfuncContext;
 import compiladores.compiladoresParser.LlamadafuncContext;
 import compiladores.compiladoresParser.ProgramaContext;
@@ -67,6 +69,9 @@ public class Escucha extends compiladoresBaseListener {
      * Reportador centralizado de mensajes (errores, warnings, información).
      */
     private final Reportador reportador = Reportador.getInstancia();
+
+    /** Tipo de función actualmente en análisis, para declarar correctamente los parámetros. */
+    private String tipoFuncionActual = null;
 
     /**
      * Se invoca al entrar al nodo raíz del programa (inicio del parsing).
@@ -154,6 +159,72 @@ public class Escucha extends compiladoresBaseListener {
         }
         tabla.delContexto();
     }
+
+    /**
+     * Al entrar a la definición de una función se crea un nuevo contexto
+     * para sus parámetros y variables locales.
+     */
+    @Override
+    public void enterDeclaracionfunc(DeclaracionfuncContext ctx) {
+        super.enterDeclaracionfunc(ctx);
+        // Abrimos un contexto propio de la función.
+        tabla.addContexto();
+
+        // Intentamos obtener tipo y nombre de la función si el parser los provee.
+        tipoFuncionActual = (ctx.tipofunc() != null) ? ctx.tipofunc().getText() : null;
+        String nombreFunc = (ctx.ID() != null) ? ctx.ID().getText() : "<sin_nombre>";
+        System.out.println("[Escucha] enterDeclaracionfunc tipo=" + tipoFuncionActual + " nombre=" + nombreFunc);
+
+        // Estrategia robusta: buscar nodos Idfunc/Listaidfunc en los hijos y
+        // extraer los nombres de parámetros a partir de su texto.
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if (ctx.getChild(i) instanceof IdfuncContext) {
+                IdfuncContext idfunc = (IdfuncContext) ctx.getChild(i);
+                System.out.println("[Escucha]   idfunc(raw) = " + idfunc.getText());
+
+                // El texto típico será algo del estilo "inta,intb" o "inta,intb,intc".
+                String raw = idfunc.getText();
+                // Normalizamos separando por comas.
+                String[] partes = raw.split(",");
+                for (String parte : partes) {
+                    // Cada parte es algo como "inta" o "intb" o "doublex" etc.
+                    // Buscamos el último tramo de letras (nombre) al final.
+                    String p = parte.trim();
+                    if (p.isEmpty()) continue;
+
+                    int idx = p.length() - 1;
+                    while (idx >= 0 && Character.isLetter(p.charAt(idx))) {
+                        idx--;
+                    }
+                    String nombreParam = p.substring(idx + 1);
+                    String tipoParam = p.substring(0, idx + 1);
+
+                    if (!nombreParam.isEmpty() && !tipoParam.isEmpty()) {
+                        System.out.println("[Escucha]   param detectado tipo=" + tipoParam + " nombre=" + nombreParam);
+                        declararParametro(tipoParam, nombreParam,
+                                          idfunc.getStart().getLine(), idfunc.getStart().getCharPositionInLine());
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * El helper que declara un parámetro como variable inicializada en el contexto actual.
+     */
+    private void declararParametro(String tipo, String nombre, int linea, int columna) {
+        if (tabla.contieneSimboloLocal(nombre)) {
+            reportador.error("Error semantico: Doble declaracion de parametro " + nombre, linea, columna);
+            errors++;
+            return;
+        }
+        Variable param = new Variable();
+        param.setNombre(nombre);
+        param.setTipoDato(tipo);
+        param.setInicializado(true); // parámetros se consideran inicializados
+        param.setUsado(false);
+        tabla.addSimbolo(nombre, param);
+    }
     
     /**
      * Se invoca al salir de una declaración de variable.
@@ -174,7 +245,7 @@ public class Escucha extends compiladoresBaseListener {
         super.exitDeclaracion(ctx);
     
         String nombre = ctx.ID().getText();
-        // Validación semántica para evitar doble declaración
+        // Validación semántica: no permitir doble declaración en el mismo bloque
         if (!tabla.contieneSimboloLocal(nombre)) {
             Variable nuevaVariable = new Variable();
             String tipo = ctx.getChild(0).getText();  // Obtención del tipo de la variable
@@ -208,16 +279,26 @@ public class Escucha extends compiladoresBaseListener {
         super.exitPrototipofunc(ctx);
 
         String nombre = ctx.ID().getText();
+        Id existente = tabla.getSimbolo(nombre);
 
-        if (!tabla.contieneSimboloLocal(nombre)) {
+        // Si no existe aún, lo registramos como prototipo
+        if (existente == null) {
             Funcion nuevaFuncion = new Funcion();
             String tipo = ctx.getChild(0).getText();
             nuevaFuncion.setNombre(nombre);
             nuevaFuncion.setTipoDato(tipo);
             nuevaFuncion.setUsado(false);
             tabla.addSimbolo(nombre, nuevaFuncion);
+        } else if (existente instanceof Funcion) {
+            // Si ya hay una función con el mismo nombre, verificamos compatibilidad básica de tipo
+            if (!existente.getTipoDato().equals(ctx.getChild(0).getText())) {
+                reportador.error("Error semantico: Prototipo incompatible con la funcion existente", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
+            }
+            // No consideramos error un prototipo repetido compatible
         } else {
-            reportador.error("Error semantico: Doble declaracion del mismo identificador", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            // Existe un símbolo no función con el mismo nombre
+            reportador.error("Error semantico: Identificador ya usado con otro proposito", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
             errors++;
         }
     }
@@ -239,23 +320,34 @@ public class Escucha extends compiladoresBaseListener {
     @Override
     public void exitDeclaracionfunc(DeclaracionfuncContext ctx) {
         super.exitDeclaracionfunc(ctx);
+        if (ctx.ID() != null) {
+            String nombre = ctx.ID().getText();
+            Id existente = tabla.getSimbolo(nombre);
 
-        String nombre = ctx.ID().getText();
-
-        if (!tabla.contieneSimboloLocal(nombre)) {
-            Funcion nuevaFuncion = new Funcion();
-
-            String tipo = ctx.getChild(0).getText();
-
-            nuevaFuncion.setNombre(nombre);
-            nuevaFuncion.setTipoDato(tipo);
-            nuevaFuncion.setUsado(false);
-
-            tabla.addSimbolo(nombre, nuevaFuncion);
-        } else {
-            reportador.error("Error semantico: Doble declaracion del mismo identificador", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-            errors++;
+            if (existente == null) {
+                // Definición sin prototipo previo
+                Funcion nuevaFuncion = new Funcion();
+                String tipo = ctx.getChild(0).getText();
+                nuevaFuncion.setNombre(nombre);
+                nuevaFuncion.setTipoDato(tipo);
+                nuevaFuncion.setUsado(false);
+                tabla.addSimbolo(nombre, nuevaFuncion);
+            } else if (existente instanceof Funcion) {
+                // Ya había un prototipo; verificamos que el tipo sea compatible
+                if (!existente.getTipoDato().equals(ctx.getChild(0).getText())) {
+                    reportador.error("Error semantico: Tipo de retorno distinto al del prototipo", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                }
+                // No lo tratamos como doble declaración; es la definición esperada
+            } else {
+                reportador.error("Error semantico: Identificador ya usado como variable", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
+            }
         }
+
+        // Al salir de la función cerramos el contexto de parámetros/variables locales
+        tabla.delContexto();
+        tipoFuncionActual = null;
     }
 
     /**
@@ -284,7 +376,7 @@ public class Escucha extends compiladoresBaseListener {
             if (simbolo == null) {
                 // La variable destino debe estar declarada previamente
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;           
+                errors++;
             } else {
                 // La variable destino está siendo asignada, marcarla como inicializada.
                 // La validación de variables no inicializadas en el lado derecho (expresión)
@@ -312,8 +404,9 @@ public class Escucha extends compiladoresBaseListener {
         if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
+                System.out.println("[Escucha] exitFactor ID='" + ctx.ID().getText() + "' -> no declarado");
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;             
+                errors++;
             } else {
                 if (Boolean.FALSE.equals(simbolo.getInicializado())
                         && !(ctx.getParent() instanceof compiladoresParser.AsignacionContext
@@ -342,9 +435,9 @@ public class Escucha extends compiladoresBaseListener {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;             
+                errors++;
             }
-            else if (simbolo != null && simbolo.getInicializado() == false) {
+            else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             } else {
@@ -370,10 +463,11 @@ public class Escucha extends compiladoresBaseListener {
         if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
+                System.out.println("[Escucha] exitFactorfunc ID='" + ctx.ID().getText() + "' -> no declarado");
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;             
+                errors++;
             }
-            else if (simbolo != null && simbolo.getInicializado() == false) {
+            else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             } else {
@@ -400,9 +494,9 @@ public class Escucha extends compiladoresBaseListener {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;             
+                errors++;
             }
-            else if (simbolo != null && simbolo.getInicializado() == false) {
+            else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             } else {

@@ -77,6 +77,7 @@ public final class TablaSimbolos {
      */
     public void addContexto() {
         ts.add(new HashMap<>());
+        System.out.println("[TS] addContexto -> size=" + ts.size());
     }
 
     /**
@@ -96,6 +97,7 @@ public final class TablaSimbolos {
      */
     public void delContexto() {
         if (!ts.isEmpty()) {
+            System.out.println("[TS] delContexto <- size=" + ts.size());
             ts.remove(ts.size() - 1);
         }
     }
@@ -125,6 +127,7 @@ public final class TablaSimbolos {
             // para permitir sombreado y reutilización en funciones distintas.
             if (!contextoActual.containsKey(nombre)) {
                 contextoActual.put(nombre, id);
+                System.out.println("[TS] addSimbolo '" + nombre + "' en contexto=" + (ts.size()-1));
             }
         }
     }
