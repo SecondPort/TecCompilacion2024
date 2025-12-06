@@ -431,7 +431,7 @@ public class Escucha extends compiladoresBaseListener {
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;             
             }
-            else if (simbolo != null && simbolo.getInicializado() == false) {
+            else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             } else {

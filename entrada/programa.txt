@@ -1,71 +1,138 @@
-int a;
-int b = 5;
-char c = 'z';
+int f(int x);int sumar(int a, int b);
+int max_int(int a, int b);
+double promedio3(int a, int b, int c);
+void contar_hasta(int n);
+int factorial(int n);
+int prueba_break_continue(int limite);
+char siguiente_char(char c);
 
-a = 3;
-b = b + a;
+int main() {
+    int x = 5;
+    int y = 10;
+    int z;
+    double d1 = 3.5;
+    double d2 = 2.0;
+    char c1 = 'A';
+    char c2;
 
-if (a == 3) {
-	b = b + 1;
-} else {
-	b = b - 1;
+    z = x + y;
+    z = z - 3 * 2;
+    z = z / 3;
+
+    d1 = d1 + d2 * 2.0;
+    d1 = d1 / 2.5;
+
+    int condicion1 = (x < y);
+    int condicion2 = (z == 3);
+    int condicion3 = (x > y);
+    int condicion4 = (condicion1 && condicion2);
+    int condicion5 = (condicion3 || condicion2);
+    int condicion6 = !condicion3;
+
+    if (condicion4) {
+        z = z + 1;
+    } else {
+        z = z - 1;
+    }
+
+    if (condicion3) {
+        z = -1;
+    } else {
+        z = z + 2;
+    }
+
+    int suma = sumar(x, y);
+    int maximo = max_int(x, y);
+    double prom = promedio3(3, 4, 5);
+    int fact_5 = factorial(5);
+    int resultado_bc = prueba_break_continue(10);
+
+    int contador = 0;
+    while (contador < 5) {
+        contador = contador + 1;
+    }
+
+    int suma_for = 0;
+    int i;
+    for (i = 0; i < 5; i = i + 1) {
+        suma_for = suma_for + i;
+    }
+
+    int suma_pares = 0;
+    for (i = 0; i < 10; i = i + 1) {
+        if (i % 2 != 0) {
+            continue;
+        }
+        if (i > 6) {
+            break;
+        }
+        suma_pares = suma_pares + i;
+    }
+
+    c2 = siguiente_char(c1);
+    char c3 = 'z';
+    char c4 = siguiente_char(c3);
+
+    return 0;
 }
 
-while (a < 10 && b < 20) {
-	a = a + 1;
+int sumar(int a, int b) {
+    int r = a + b;
+    return r;
 }
 
-int i;
-int suma = 0;
-char ch = 'a';
-
-for (i = 0; i < 10; i++) {
-	if (i == 2) {
-		continue;
-	}
-	if (i == 7) {
-		break;
-	}
-	suma = suma + i;
+int max_int(int a, int b) {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
+    }
 }
 
-int f(int x, int y);
-int g(int);
-void h();
-
-int f(int x, int y) {
-	int r = 0;
-	r = x + y;
-	return r;
+double promedio3(int a, int b, int c) {
+    int suma = a + b + c;
+    double prom = suma / 3;
+    return prom;
 }
 
-int g(int p) {
-	return p;
+void contar_hasta(int n) {
+    int i = 0;
+    while (i < n) {
+        i = i + 1;
+    }
 }
 
-void h() {
-	int local = 1;
-	local = local + 1;
-	return;
+int factorial(int n) {
+    int res = 1;
+    int i;
+    for (i = 1; i <= n; i = i + 1) {
+        res = res * i;
+    }
+    return res;
 }
 
-int res;
-res = f(a, b);
-res = g(res);
+int prueba_break_continue(int limite) {
+    int i = 0;
+    int suma = 0;
 
-x = 10;
+    while (i < limite) {
+        i = i + 1;
 
-int a;
+        if (i == 3) {
+            continue;
+        }
 
-int noInit;
-if (noInit == 0) {
-	noInit = 1;
+        if (i == 7) {
+            break;
+        }
+
+        suma = suma + i;
+    }
+
+    return suma;
 }
 
-int otro;
-b = b + otro;
-
-break;
-continue;
-
-int f(int x);
+char siguiente_char(char c) {
+    char r = c + 1;
+    return r;
+}

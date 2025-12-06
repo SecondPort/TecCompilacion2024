@@ -1,66 +1,138 @@
-a = 3
-t0 = b + a
-b = t0
-t1 = a == 3
-if t1 goto l0
+t0 = x + y
+z = t0
+t1 = 3 * 2
+t2 = z - t1
+z = t2
+t3 = z / 3
+z = t3
+t4 = d2 * 2
+t5 = d1 + t4
+d1 = t5
+t6 = d1 / 2
+d1 = t6
+t7 =  condicion4
+if t7 goto l0
 goto l1
 l0:
-t2 = b + 1
-b = t2
+t8 = z + 1
+z = t8
 goto l2
 l1:
-t3 = b - 1
-b = t3
+t9 = z - 1
+z = t9
 l2:
+t10 =  condicion3
+if t10 goto l3
+goto l4
 l3:
-t4 = a < 10
-t5 = b < 20
-t6 = t4 && t5
-if t6 goto l4
+z = 1
 goto l5
 l4:
-t7 = a + 1
-a = t7
-goto l3
+t11 = z + 2
+z = t11
 l5:
-i = 0
+t12 = sumar call x
+t13 = max_int call x
+t14 = promedio3 call 3
+t15 = factorial call 5
+t16 = prueba_break_continue call 10
 l6:
-t8 = i < 10
-if t8 goto l7
+t17 = contador < 5
+if t17 goto l7
 goto l8
 l7:
-t9 = i == 2
-if t9 goto l9
-goto l10
-l9:
-goto l6
-l10:
-t10 = i == 7
-if t10 goto l11
-goto l12
-l11:
-goto l8
-l12:
-t11 = suma + i
-suma = t11
-i = i + 1
+t18 = contador + 1
+contador = t18
 goto l6
 l8:
-t12 = x + y
-r = t12
-null = return r
-null = return p
-t13 = local + 1
-local = t13
-return null
-res = f
-res = g
-x = 10
-t14 = noInit == 0
-if t14 goto l13
+i = 0
+l9:
+t19 = i < 5
+if t19 goto l10
+goto l11
+l10:
+t20 = suma_for + i
+suma_for = t20
+i = 0
+l12:
+t21 = i < 10
+if t21 goto l13
 goto l14
 l13:
-noInit = 1
+t22 = i % 2
+if t22 goto l15
+goto l16
+l15:
+goto l12
+l16:
+t23 = i > 6
+if t23 goto l17
+goto l18
+l17:
+goto l14
+l18:
+t24 = suma_pares + i
+suma_pares = t24
+c2 = siguiente_char
+t25 = siguiente_char call c3
+null = return 0
+goto l12
 l14:
-t15 = b + otro
-b = t15
+null = return r
+t26 = a > b
+if t26 goto l19
+goto l20
+l19:
+null = return a
+goto l21
+l20:
+null = return b
+l21:
+null = return prom
+l22:
+t27 = i < n
+if t27 goto l23
+goto l24
+l23:
+t28 = i + 1
+i = t28
+goto l22
+l24:
+i = 1
+l25:
+t29 = i < n
+if t29 goto l26
+goto l27
+l26:
+t30 = res * i
+res = t30
+null = return res
+goto l25
+l27:
+l28:
+t31 = i < limite
+if t31 goto l29
+goto l30
+l29:
+t32 = i + 1
+i = t32
+t33 = i == 3
+if t33 goto l31
+goto l32
+l31:
+goto l28
+l32:
+t34 = i == 7
+if t34 goto l33
+goto l34
+l33:
+goto l30
+l34:
+t35 = suma + i
+suma = t35
+goto l28
+l30:
+null = return suma
+null = return r
+goto l9
+l11:

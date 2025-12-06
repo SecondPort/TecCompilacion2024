@@ -255,17 +255,21 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
     @Override
     public String visitCondicion(CondicionContext ctx) {
+        if (ctx == null || ctx.comparacion() == null) {
+            return "";
+        }
         String left = visit(ctx.comparacion());
         return processListaComp(ctx.listacomp(), left);
     }
     
     private String processListaComp(ListacompContext ctx, String left) {
-        if (ctx.getChildCount() == 0) return left;
+        if (ctx == null || ctx.getChildCount() == 0) return left;
         
         String op = "";
         if (ctx.AND() != null) op = "&&";
         else if (ctx.OR() != null) op = "||";
         
+        if (ctx.comparacion() == null) return left;
         String right = visit(ctx.comparacion());
         String temp = newTemp();
         instrucciones.add(new Instruccion(op, left, right, temp));
