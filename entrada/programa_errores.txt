@@ -1,0 +1,57 @@
+int sumar(int a, int b);
+int sinReturn(int x);
+void g();
+int h(int a);
+void testBreak();
+void testContinue();
+
+int main() {
+    int a = 1;
+    int b;
+    int a;
+    x = 5;
+    int c = d + 1;
+    double d1 = 2.5;
+    double d2 = 1;
+    int e = d1;
+    char ch = 'A';
+    int r1 = sumar(a, d1);
+    int r2 = sumar(a);
+    int r3 = sinReturn(10);
+    if (z > 0) {
+        int y;
+        y = y + 1;
+    }
+    for (i = 0; i < 10; i = i + 1) {
+        break;
+    }
+    return 0.5;
+}
+
+int sumar(int a, int b) {
+    return a + b;
+}
+
+int sinReturn(int x) {
+    int y = x + 1;
+}
+
+void g() {
+    return 1;
+}
+
+int h(int a) {
+    return a;
+}
+
+double h(int a) {
+    return 1.0;
+}
+
+void testBreak() {
+    break;
+}
+
+void testContinue() {
+    continue;
+}

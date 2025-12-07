@@ -6,6 +6,11 @@ package compiladores;
  */
 public class Mensaje {
 
+    private static final String ANSI_RESET = "\u001B[0m";
+    private static final String ANSI_RED = "\u001B[31m";
+    private static final String ANSI_YELLOW = "\u001B[33m";
+    private static final String ANSI_BLUE = "\u001B[34m";
+
     public enum Tipo {
         INFO,
         WARNING,
@@ -42,6 +47,18 @@ public class Mensaje {
 
     @Override
     public String toString() {
-        return "[" + tipo + "] (" + linea + "," + columna + ") " + texto;
+        String color;
+        switch (tipo) {
+            case ERROR:
+                color = ANSI_RED;
+                break;
+            case WARNING:
+                color = ANSI_YELLOW;
+                break;
+            default:
+                color = ANSI_BLUE;
+                break;
+        }
+        return color + "[" + tipo + "] (" + linea + "," + columna + ") " + texto + ANSI_RESET;
     }
 }

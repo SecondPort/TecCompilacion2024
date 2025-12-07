@@ -29,9 +29,9 @@ l4:
 t16 = z + 2
 z = t16
 l5:
-t17 = sumar call x
-t18 = max_int call x
-t19 = promedio3 call 3
+t17 = sumar call x,y
+t18 = max_int call x,y
+t19 = promedio3 call 3,4,5
 t20 = factorial call 5
 t21 = prueba_break_continue call 10
 l6:

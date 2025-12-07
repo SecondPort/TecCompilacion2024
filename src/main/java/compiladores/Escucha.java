@@ -18,6 +18,7 @@ import compiladores.compiladoresParser.ListafactfuncContext;
 import compiladores.compiladoresParser.LlamadafuncContext;
 import compiladores.compiladoresParser.ProgramaContext;
 import compiladores.compiladoresParser.PrototipofuncContext;
+import java.util.List;
 
 /**
  * Implementación del patrón Listener de ANTLR4 para análisis semántico del compilador.
@@ -71,7 +72,7 @@ public class Escucha extends compiladoresBaseListener {
     private final Reportador reportador = Reportador.getInstancia();
 
     /** Tipo de función actualmente en análisis, para validar retornos si se requiere. */
-    private String tipoFuncionActual = null;
+    private TipoDato tipoFuncionActual = null;
     /** Indica si estamos recorriendo la definición (con cuerpo) de una función. */
     private boolean enDeclaracionFuncion = false;
 
@@ -176,11 +177,11 @@ public class Escucha extends compiladoresBaseListener {
         enDeclaracionFuncion = true;
 
         // Tipo y nombre de la función (con fallback por si los getters regresan null).
-        String tipoFunc = (ctx.tipofunc() != null) ? ctx.tipofunc().getText() : null;
-        if (tipoFunc == null && ctx.getChildCount() > 0) {
-            tipoFunc = ctx.getChild(0).getText();
+        String tipoFuncLexema = (ctx.tipofunc() != null) ? ctx.tipofunc().getText() : null;
+        if (tipoFuncLexema == null && ctx.getChildCount() > 0) {
+            tipoFuncLexema = ctx.getChild(0).getText();
         }
-        tipoFuncionActual = (tipoFunc != null) ? tipoFunc : "<funcion>";
+        tipoFuncionActual = resolverTipo(tipoFuncLexema);
 
         String nombreFunc = (ctx.ID() != null)
                 ? ctx.ID().getText()
@@ -216,6 +217,69 @@ public class Escucha extends compiladoresBaseListener {
         return null;
     }
 
+    /** Traduce el lexema de tipo a {@link TipoDato}. */
+    private TipoDato resolverTipo(String lexema) {
+        return TablaSimbolos.parseTipoDato(lexema);
+    }
+
+    /** Obtiene la lista de tipos declarados para los parámetros de una función. */
+    private java.util.List<TipoDato> extraerTiposParametros(IdfuncContext idfunc) {
+        java.util.List<TipoDato> tipos = new java.util.ArrayList<>();
+        if (idfunc == null) {
+            return tipos;
+        }
+
+        if (idfunc.tipo() != null) {
+            tipos.add(resolverTipo(idfunc.tipo().getText()));
+        }
+
+        ListaidfuncContext lista = idfunc.listaidfunc();
+        while (lista != null && lista.getChildCount() > 0) {
+            if (lista.tipo() != null) {
+                tipos.add(resolverTipo(lista.tipo().getText()));
+            }
+            lista = lista.listaidfunc();
+        }
+        return tipos;
+    }
+
+    private boolean firmasCompatibles(Funcion funcion, TipoDato retorno, java.util.List<TipoDato> firma) {
+        if (funcion == null) {
+            return false;
+        }
+        if (retorno != null && funcion.getTipoDato() != null && funcion.getTipoDato() != retorno) {
+            return false;
+        }
+        if (firma == null || funcion.getArgumentos() == null) {
+            return true;
+        }
+        if (funcion.getArgumentos().size() != firma.size()) {
+            return false;
+        }
+        for (int i = 0; i < firma.size(); i++) {
+            if (funcion.getArgumentos().get(i) != firma.get(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private int contarArgumentos(FactorfuncContext ctx) {
+        if (ctx == null) {
+            return 0;
+        }
+        int cantidad = 0;
+        if (ctx.NUMERO() != null || ctx.ID() != null || ctx.expresion() != null) {
+            cantidad = 1;
+        }
+        ListafactfuncContext lista = ctx.listafactfunc();
+        while (lista != null && lista.getChildCount() > 0) {
+            cantidad++;
+            lista = lista.listafactfunc();
+        }
+        return cantidad;
+    }
+
     /**
      * Registra todos los parámetros de una definición de función en el contexto actual.
      */
@@ -231,7 +295,7 @@ public class Escucha extends compiladoresBaseListener {
 
         // Primer parámetro (variante tipo ID listaidfunc).
         if (idfunc.tipo() != null && idfunc.ID() != null) {
-            declararParametro(idfunc.tipo().getText(), idfunc.ID().getText(),
+            declararParametro(resolverTipo(idfunc.tipo().getText()), idfunc.ID().getText(),
                     idfunc.getStart().getLine(), idfunc.getStart().getCharPositionInLine());
         }
 
@@ -239,7 +303,7 @@ public class Escucha extends compiladoresBaseListener {
         ListaidfuncContext lista = idfunc.listaidfunc();
         while (lista != null) {
             if (lista.tipo() != null && lista.ID() != null) {
-                declararParametro(lista.tipo().getText(), lista.ID().getText(),
+                declararParametro(resolverTipo(lista.tipo().getText()), lista.ID().getText(),
                         lista.getStart().getLine(), lista.getStart().getCharPositionInLine());
             }
             lista = lista.listaidfunc();
@@ -249,7 +313,7 @@ public class Escucha extends compiladoresBaseListener {
     /**
      * Declara un parámetro como variable inicializada en el contexto actual.
      */
-    private void declararParametro(String tipo, String nombre, int linea, int columna) {
+    private void declararParametro(TipoDato tipo, String nombre, int linea, int columna) {
         if (tabla.contieneSimboloLocal(nombre)) {
             reportador.error("Error semantico: Doble declaracion de parametro " + nombre, linea, columna);
             errors++;
@@ -285,8 +349,12 @@ public class Escucha extends compiladoresBaseListener {
         // Validación semántica: no permitir doble declaración en el mismo bloque
         if (!tabla.contieneSimboloLocal(nombre)) {
             Variable nuevaVariable = new Variable();
-            String tipo = ctx.getChild(0).getText();  // Obtención del tipo de la variable
-    
+            TipoDato tipo = resolverTipo(ctx.getChild(0).getText());
+            if (tipo == null) {
+                reportador.error("Error semantico: Tipo de dato desconocido", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
+                return;
+            }
             nuevaVariable.setNombre(nombre);
             nuevaVariable.setTipoDato(tipo);
             nuevaVariable.setInicializado(!ctx.getChild(2).getText().isBlank());
@@ -317,18 +385,26 @@ public class Escucha extends compiladoresBaseListener {
 
         String nombre = ctx.ID().getText();
         Id existente = tabla.getSimbolo(nombre);
+        TipoDato tipoRetorno = resolverTipo(ctx.getChild(0).getText());
+        java.util.List<TipoDato> firma = extraerTiposParametros(ctx.idfunc());
+
+        if (tipoRetorno == null) {
+            reportador.error("Error semantico: Tipo de retorno desconocido", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            errors++;
+            return;
+        }
 
         // Si no existe aún, lo registramos como prototipo
         if (existente == null) {
             Funcion nuevaFuncion = new Funcion();
-            String tipo = ctx.getChild(0).getText();
             nuevaFuncion.setNombre(nombre);
-            nuevaFuncion.setTipoDato(tipo);
+            nuevaFuncion.setTipoDato(tipoRetorno);
             nuevaFuncion.setUsado(false);
+            nuevaFuncion.setArgumentos(firma);
             tabla.addSimbolo(nombre, nuevaFuncion);
         } else if (existente instanceof Funcion) {
             // Si ya hay una función con el mismo nombre, verificamos compatibilidad básica de tipo
-            if (!existente.getTipoDato().equals(ctx.getChild(0).getText())) {
+            if (!firmasCompatibles((Funcion) existente, tipoRetorno, firma)) {
                 reportador.error("Error semantico: Prototipo incompatible con la funcion existente", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             }
@@ -360,22 +436,31 @@ public class Escucha extends compiladoresBaseListener {
         if (ctx.ID() != null) {
             String nombre = ctx.ID().getText();
             Id existente = tabla.getSimbolo(nombre);
+            TipoDato tipoRetorno = resolverTipo(ctx.getChild(0).getText());
+            java.util.List<TipoDato> firma = extraerTiposParametros(ctx.idfunc());
+
+            if (tipoRetorno == null) {
+                reportador.error("Error semantico: Tipo de retorno desconocido", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
+                return;
+            }
 
             if (existente == null) {
                 // Definición sin prototipo previo
                 Funcion nuevaFuncion = new Funcion();
-                String tipo = ctx.getChild(0).getText();
                 nuevaFuncion.setNombre(nombre);
-                nuevaFuncion.setTipoDato(tipo);
+                nuevaFuncion.setTipoDato(tipoRetorno);
                 nuevaFuncion.setUsado(false);
+                nuevaFuncion.setArgumentos(firma);
                 tabla.addSimbolo(nombre, nuevaFuncion);
             } else if (existente instanceof Funcion) {
                 // Ya había un prototipo; verificamos que el tipo sea compatible
-                if (!existente.getTipoDato().equals(ctx.getChild(0).getText())) {
-                    reportador.error("Error semantico: Tipo de retorno distinto al del prototipo", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                if (!firmasCompatibles((Funcion) existente, tipoRetorno, firma)) {
+                    reportador.error("Error semantico: Tipo de retorno o firma distinta al prototipo", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                     errors++;
+                } else if (((Funcion) existente).getArgumentos() == null) {
+                    ((Funcion) existente).setArgumentos(firma);
                 }
-                // No lo tratamos como doble declaración; es la definición esperada
             } else {
                 reportador.error("Error semantico: Identificador ya usado como variable", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
@@ -460,7 +545,7 @@ public class Escucha extends compiladoresBaseListener {
                 if (tipoFuncionActual != null) {
                     Variable param = new Variable();
                     param.setNombre(nombre);
-                    param.setTipoDato("int"); // Tipo por defecto para parámetros implícitos
+                    param.setTipoDato(TipoDato.INT); // Tipo por defecto para parámetros implícitos
                     param.setInicializado(true);
                     param.setUsado(true);
                     tabla.addSimbolo(nombre, param);
@@ -531,7 +616,7 @@ public class Escucha extends compiladoresBaseListener {
                 if (tipoFuncionActual != null) {
                     Variable param = new Variable();
                     param.setNombre(nombre);
-                    param.setTipoDato("int");
+                    param.setTipoDato(TipoDato.INT);
                     param.setInicializado(true);
                     param.setUsado(true);
                     tabla.addSimbolo(nombre, param);
@@ -572,7 +657,7 @@ public class Escucha extends compiladoresBaseListener {
                 if (tipoFuncionActual != null) {
                     Variable param = new Variable();
                     param.setNombre(nombre);
-                    param.setTipoDato("int");
+                    param.setTipoDato(TipoDato.INT);
                     param.setInicializado(true);
                     param.setUsado(true);
                     tabla.addSimbolo(nombre, param);
@@ -605,17 +690,25 @@ public class Escucha extends compiladoresBaseListener {
     @Override
     public void exitLlamadafunc(LlamadafuncContext ctx) {
         super.exitLlamadafunc(ctx);
-       if (ctx.llamada_expr() != null && ctx.llamada_expr().ID() != null) {
+        if (ctx.llamada_expr() != null && ctx.llamada_expr().ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.llamada_expr().ID().getText());
             if (simbolo == null) {
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;             
-            }
-            else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
+            } else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             } else {
                 simbolo.setUsado(true);
+                if (simbolo instanceof Funcion) {
+                    Funcion f = (Funcion) simbolo;
+                    int argumentosInvocados = contarArgumentos(ctx.llamada_expr().factorfunc());
+                    List<TipoDato> firma = f.getArgumentos();
+                    if (firma != null && !firma.isEmpty() && argumentosInvocados != firma.size()) {
+                        reportador.error("Error semantico: Cantidad de argumentos incompatible con la firma", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                        errors++;
+                    }
+                }
             }
         } 
     }

@@ -203,6 +203,28 @@ public final class TablaSimbolos {
     }  
 
     /**
+     * Traduce un lexema de tipo a la enumeración interna.
+     * Devuelve {@code null} si el lexema no corresponde a un tipo conocido.
+     */
+    public static TipoDato parseTipoDato(String lexema) {
+        if (lexema == null) {
+            return null;
+        }
+        switch (lexema.toLowerCase()) {
+            case "int":
+                return TipoDato.INT;
+            case "double":
+                return TipoDato.DOUBLE;
+            case "char":
+                return TipoDato.CHAR;
+            case "void":
+                return TipoDato.VOID;
+            default:
+                return null;
+        }
+    }
+
+    /**
      * Recorre todos los símbolos de todos los contextos y aplica un consumidor.
      * <p>
      * Útil para recorridos globales al finalizar la compilación, por ejemplo
@@ -249,7 +271,7 @@ abstract class Id {
     /**
      * Tipo de dato del identificador (ej: "int", "double", "void").
      */
-    private String tipoDato;
+    private TipoDato tipoDato;
     
     /**
      * Indica si el identificador ha sido inicializado con un valor.
@@ -284,19 +306,19 @@ abstract class Id {
     /**
      * Obtiene el tipo de dato del identificador.
      *
-     * @return el tipo de dato como String (ej: "int", "double", "void")
+     * @return el tipo de dato como {@link TipoDato}
      */
-    public String getTipoDato() {
+    public TipoDato getTipoDato() {
         return tipoDato;
     }
 
     /**
      * Establece el tipo de dato del identificador.
      *
-     * @param tipoDato el tipo de dato como String (ej: "int", "double", "void")
+     * @param tipoDato el tipo de dato como {@link TipoDato}
      * @see TipoDato
      */
-    public void setTipoDato(String tipoDato) {
+    public void setTipoDato(TipoDato tipoDato) {
         this.tipoDato = tipoDato;
     }
 

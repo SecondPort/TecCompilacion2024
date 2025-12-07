@@ -298,34 +298,44 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
     @Override
     public String visitFactorfunc(FactorfuncContext ctx) {
-        // Por simplicidad, devolvemos el último argumento evaluado (o vacío si no hay)
+        List<String> args = new ArrayList<>();
         if (ctx.NUMERO() != null) {
-            return ctx.NUMERO().getText();
+            args.add(ctx.NUMERO().getText());
         }
         if (ctx.ID() != null) {
-            return ctx.ID().getText();
+            args.add(ctx.ID().getText());
         }
         if (ctx.expresion() != null) {
-            return visit(ctx.expresion());
+            args.add(visit(ctx.expresion()));
         }
         if (ctx.listafactfunc() != null) {
-            return visit(ctx.listafactfunc());
+            String rest = visit(ctx.listafactfunc());
+            if (!rest.isBlank()) {
+                args.add(rest);
+            }
         }
-        return "";
+        return String.join(",", args);
     }
 
     @Override
     public String visitListafactfunc(ListafactfuncContext ctx) {
+        List<String> args = new ArrayList<>();
         if (ctx.NUMERO() != null) {
-            return ctx.NUMERO().getText();
+            args.add(ctx.NUMERO().getText());
         }
         if (ctx.ID() != null) {
-            return ctx.ID().getText();
+            args.add(ctx.ID().getText());
         }
         if (ctx.expresion() != null) {
-            return visit(ctx.expresion());
+            args.add(visit(ctx.expresion()));
         }
-        return "";
+        if (ctx.listafactfunc() != null) {
+            String rest = visit(ctx.listafactfunc());
+            if (!rest.isBlank()) {
+                args.add(rest);
+            }
+        }
+        return String.join(",", args);
     }
 
     @Override
