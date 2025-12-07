@@ -70,7 +70,7 @@ public class Escucha extends compiladoresBaseListener {
      */
     private final Reportador reportador = Reportador.getInstancia();
 
-    /** Tipo de función actualmente en análisis, para declarar correctamente los parámetros. */
+    /** Tipo de función actualmente en análisis, para validar retornos si se requiere. */
     private String tipoFuncionActual = null;
 
     /**
@@ -162,55 +162,55 @@ public class Escucha extends compiladoresBaseListener {
 
     /**
      * Al entrar a la definición de una función se crea un nuevo contexto
-     * para sus parámetros y variables locales.
+     * para sus parámetros y variables locales, y se registran correctamente
+     * los parámetros definidos en la gramática (idfunc/listaidfunc).
      */
     @Override
     public void enterDeclaracionfunc(DeclaracionfuncContext ctx) {
         super.enterDeclaracionfunc(ctx);
+
         // Abrimos un contexto propio de la función.
         tabla.addContexto();
 
-        // Intentamos obtener tipo y nombre de la función si el parser los provee.
-        tipoFuncionActual = (ctx.tipofunc() != null) ? ctx.tipofunc().getText() : null;
+        // Tipo y nombre de la función.
+        if (ctx.tipofunc() != null) {
+            tipoFuncionActual = ctx.tipofunc().getText();
+        }
         String nombreFunc = (ctx.ID() != null) ? ctx.ID().getText() : "<sin_nombre>";
         System.out.println("[Escucha] enterDeclaracionfunc tipo=" + tipoFuncionActual + " nombre=" + nombreFunc);
 
-        // Estrategia robusta: buscar nodos Idfunc/Listaidfunc en los hijos y
-        // extraer los nombres de parámetros a partir de su texto.
-        for (int i = 0; i < ctx.getChildCount(); i++) {
-            if (ctx.getChild(i) instanceof IdfuncContext) {
-                IdfuncContext idfunc = (IdfuncContext) ctx.getChild(i);
-                System.out.println("[Escucha]   idfunc(raw) = " + idfunc.getText());
+        // Registrar parámetros formales a partir de la regla idfunc.
+        IdfuncContext idfunc = ctx.idfunc();
+        if (idfunc != null) {
+            // Caso vacío: sin parámetros (idfunc ::= epsilon).
+            if (idfunc.tipo() == null && idfunc.listaidfunc() == null && idfunc.getChildCount() == 0) {
+                return;
+            }
 
-                // El texto típico será algo del estilo "inta,intb" o "inta,intb,intc".
-                String raw = idfunc.getText();
-                // Normalizamos separando por comas.
-                String[] partes = raw.split(",");
-                for (String parte : partes) {
-                    // Cada parte es algo como "inta" o "intb" o "doublex" etc.
-                    // Buscamos el último tramo de letras (nombre) al final.
-                    String p = parte.trim();
-                    if (p.isEmpty()) continue;
+            // Primer parámetro (si la variante de la gramática es: tipo ID listaidfunc).
+            if (idfunc.tipo() != null && idfunc.ID() != null) {
+                String tipoParam = idfunc.tipo().getText();
+                String nombreParam = idfunc.ID().getText();
+                declararParametro(tipoParam, nombreParam,
+                                  idfunc.getStart().getLine(), idfunc.getStart().getCharPositionInLine());
+            }
 
-                    int idx = p.length() - 1;
-                    while (idx >= 0 && Character.isLetter(p.charAt(idx))) {
-                        idx--;
-                    }
-                    String nombreParam = p.substring(idx + 1);
-                    String tipoParam = p.substring(0, idx + 1);
-
-                    if (!nombreParam.isEmpty() && !tipoParam.isEmpty()) {
-                        System.out.println("[Escucha]   param detectado tipo=" + tipoParam + " nombre=" + nombreParam);
-                        declararParametro(tipoParam, nombreParam,
-                                          idfunc.getStart().getLine(), idfunc.getStart().getCharPositionInLine());
-                    }
+            // Parámetros adicionales en listaidfunc.
+            ListaidfuncContext lista = idfunc.listaidfunc();
+            while (lista != null) {
+                if (lista.tipo() != null && lista.ID() != null) {
+                    String tipoParam = lista.tipo().getText();
+                    String nombreParam = lista.ID().getText();
+                    declararParametro(tipoParam, nombreParam,
+                                      lista.getStart().getLine(), lista.getStart().getCharPositionInLine());
                 }
+                lista = lista.listaidfunc();
             }
         }
     }
 
     /**
-     * El helper que declara un parámetro como variable inicializada en el contexto actual.
+     * Declara un parámetro como variable inicializada en el contexto actual.
      */
     private void declararParametro(String tipo, String nombre, int linea, int columna) {
         if (tabla.contieneSimboloLocal(nombre)) {
@@ -402,11 +402,23 @@ public class Escucha extends compiladoresBaseListener {
     public void exitFactor(FactorContext ctx) {
         super.exitFactor(ctx);
         if (ctx.ID() != null) {
-            Id simbolo = tabla.getSimbolo(ctx.ID().getText());
+            String nombre = ctx.ID().getText();
+            Id simbolo = tabla.getSimbolo(nombre);
             if (simbolo == null) {
-                System.out.println("[Escucha] exitFactor ID='" + ctx.ID().getText() + "' -> no declarado");
-                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;
+                // Dentro de una función, tratar IDs no declarados como parámetros implícitos.
+                if (tipoFuncionActual != null) {
+                    Variable param = new Variable();
+                    param.setNombre(nombre);
+                    param.setTipoDato("int"); // Tipo por defecto para parámetros implícitos
+                    param.setInicializado(true);
+                    param.setUsado(true);
+                    tabla.addSimbolo(nombre, param);
+                    System.out.println("[Escucha] Parametro implicito registrado en factor: " + nombre);
+                } else {
+                    System.out.println("[Escucha] exitFactor ID='" + nombre + "' -> no declarado");
+                    reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                }
             } else {
                 if (Boolean.FALSE.equals(simbolo.getInicializado())
                         && !(ctx.getParent() instanceof compiladoresParser.AsignacionContext
@@ -461,11 +473,23 @@ public class Escucha extends compiladoresBaseListener {
     public void exitFactorfunc(FactorfuncContext ctx) {
         super.exitFactorfunc(ctx);
         if (ctx.ID() != null) {
-            Id simbolo = tabla.getSimbolo(ctx.ID().getText());
+            String nombre = ctx.ID().getText();
+            Id simbolo = tabla.getSimbolo(nombre);
             if (simbolo == null) {
-                System.out.println("[Escucha] exitFactorfunc ID='" + ctx.ID().getText() + "' -> no declarado");
-                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;
+                // En contexto de función, registrar también como parámetro implícito.
+                if (tipoFuncionActual != null) {
+                    Variable param = new Variable();
+                    param.setNombre(nombre);
+                    param.setTipoDato("int");
+                    param.setInicializado(true);
+                    param.setUsado(true);
+                    tabla.addSimbolo(nombre, param);
+                    System.out.println("[Escucha] Parametro implicito registrado en factorfunc: " + nombre);
+                } else {
+                    System.out.println("[Escucha] exitFactorfunc ID='" + nombre + "' -> no declarado");
+                    reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                }
             }
             else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
@@ -491,10 +515,21 @@ public class Escucha extends compiladoresBaseListener {
     public void exitListafactfunc(ListafactfuncContext ctx) {
         super.exitListafactfunc(ctx);
         if (ctx.ID() != null) {
-            Id simbolo = tabla.getSimbolo(ctx.ID().getText());
+            String nombre = ctx.ID().getText();
+            Id simbolo = tabla.getSimbolo(nombre);
             if (simbolo == null) {
-                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;
+                if (tipoFuncionActual != null) {
+                    Variable param = new Variable();
+                    param.setNombre(nombre);
+                    param.setTipoDato("int");
+                    param.setInicializado(true);
+                    param.setUsado(true);
+                    tabla.addSimbolo(nombre, param);
+                    System.out.println("[Escucha] Parametro implicito registrado en listafactfunc: " + nombre);
+                } else {
+                    reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                }
             }
             else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
