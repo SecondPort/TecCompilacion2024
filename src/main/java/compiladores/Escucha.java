@@ -72,6 +72,8 @@ public class Escucha extends compiladoresBaseListener {
 
     /** Tipo de función actualmente en análisis, para validar retornos si se requiere. */
     private String tipoFuncionActual = null;
+    /** Indica si estamos recorriendo la definición (con cuerpo) de una función. */
+    private boolean enDeclaracionFuncion = false;
 
     /**
      * Se invoca al entrar al nodo raíz del programa (inicio del parsing).
@@ -171,41 +173,76 @@ public class Escucha extends compiladoresBaseListener {
 
         // Abrimos un contexto propio de la función.
         tabla.addContexto();
+        enDeclaracionFuncion = true;
 
-        // Tipo y nombre de la función.
-        if (ctx.tipofunc() != null) {
-            tipoFuncionActual = ctx.tipofunc().getText();
+        // Tipo y nombre de la función (con fallback por si los getters regresan null).
+        String tipoFunc = (ctx.tipofunc() != null) ? ctx.tipofunc().getText() : null;
+        if (tipoFunc == null && ctx.getChildCount() > 0) {
+            tipoFunc = ctx.getChild(0).getText();
         }
-        String nombreFunc = (ctx.ID() != null) ? ctx.ID().getText() : "<sin_nombre>";
+        tipoFuncionActual = (tipoFunc != null) ? tipoFunc : "<funcion>";
+
+        String nombreFunc = (ctx.ID() != null)
+                ? ctx.ID().getText()
+                : extraerPrimerId(ctx);
+
         System.out.println("[Escucha] enterDeclaracionfunc tipo=" + tipoFuncionActual + " nombre=" + nombreFunc);
+    }
 
-        // Registrar parámetros formales a partir de la regla idfunc.
-        IdfuncContext idfunc = ctx.idfunc();
-        if (idfunc != null) {
-            // Caso vacío: sin parámetros (idfunc ::= epsilon).
-            if (idfunc.tipo() == null && idfunc.listaidfunc() == null && idfunc.getChildCount() == 0) {
-                return;
-            }
-
-            // Primer parámetro (si la variante de la gramática es: tipo ID listaidfunc).
-            if (idfunc.tipo() != null && idfunc.ID() != null) {
-                String tipoParam = idfunc.tipo().getText();
-                String nombreParam = idfunc.ID().getText();
-                declararParametro(tipoParam, nombreParam,
-                                  idfunc.getStart().getLine(), idfunc.getStart().getCharPositionInLine());
-            }
-
-            // Parámetros adicionales en listaidfunc.
-            ListaidfuncContext lista = idfunc.listaidfunc();
-            while (lista != null) {
-                if (lista.tipo() != null && lista.ID() != null) {
-                    String tipoParam = lista.tipo().getText();
-                    String nombreParam = lista.ID().getText();
-                    declararParametro(tipoParam, nombreParam,
-                                      lista.getStart().getLine(), lista.getStart().getCharPositionInLine());
+    /**
+     * Busca de manera defensiva el primer nodo ID dentro del contexto de la función.
+     */
+    private String extraerPrimerId(ParserRuleContext ctx) {
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if (ctx.getChild(i) instanceof TerminalNode) {
+                TerminalNode tn = (TerminalNode) ctx.getChild(i);
+                if (tn.getSymbol().getType() == compiladoresParser.ID) {
+                    return tn.getText();
                 }
-                lista = lista.listaidfunc();
             }
+        }
+        return "<sin_nombre>";
+    }
+
+    /**
+     * Busca un nodo Idfunc dentro de los hijos si el getter directo regresa null.
+     */
+    private IdfuncContext buscarIdfunc(ParserRuleContext ctx) {
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if (ctx.getChild(i) instanceof IdfuncContext) {
+                return (IdfuncContext) ctx.getChild(i);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Registra todos los parámetros de una definición de función en el contexto actual.
+     */
+    private void registrarParametros(IdfuncContext idfunc) {
+        if (idfunc == null) {
+            return;
+        }
+
+        // Caso vacío: sin parámetros (idfunc ::= epsilon).
+        if (idfunc.getChildCount() == 0) {
+            return;
+        }
+
+        // Primer parámetro (variante tipo ID listaidfunc).
+        if (idfunc.tipo() != null && idfunc.ID() != null) {
+            declararParametro(idfunc.tipo().getText(), idfunc.ID().getText(),
+                    idfunc.getStart().getLine(), idfunc.getStart().getCharPositionInLine());
+        }
+
+        // Parámetros adicionales en listaidfunc.
+        ListaidfuncContext lista = idfunc.listaidfunc();
+        while (lista != null) {
+            if (lista.tipo() != null && lista.ID() != null) {
+                declararParametro(lista.tipo().getText(), lista.ID().getText(),
+                        lista.getStart().getLine(), lista.getStart().getCharPositionInLine());
+            }
+            lista = lista.listaidfunc();
         }
     }
 
@@ -348,6 +385,20 @@ public class Escucha extends compiladoresBaseListener {
         // Al salir de la función cerramos el contexto de parámetros/variables locales
         tabla.delContexto();
         tipoFuncionActual = null;
+        enDeclaracionFuncion = false;
+    }
+
+    /**
+     * Se invoca al salir de la regla idfunc y registra parámetros únicamente
+     * cuando se está dentro de una declaración de función (no en prototipos).
+     */
+    @Override
+    public void exitIdfunc(IdfuncContext ctx) {
+        super.exitIdfunc(ctx);
+        if (!enDeclaracionFuncion) {
+            return; // Evita registrar parámetros en prototipos u otros usos.
+        }
+        registrarParametros(ctx);
     }
 
     /**
