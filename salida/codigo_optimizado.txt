@@ -1,145 +1,28 @@
-t0 = x + y
-z = t0
-t1 = z - 3
-t2 = t1 * 2
-z = t2
-t3 = z / 3
-z = t3
-t4 = d1 + d2
-t5 = t4 * 2.0
-d1 = t5
-t6 = d1 / 2.5
-d1 = t6
-if condicion4 goto l0
+x = 5
+t1 = sumar call a,d1
+t2 = sumar call a
+t3 = sinReturn call 10
+t4 = z > 0
+if t4 goto l0
 goto l1
 l0:
-t13 = z + 1
-z = t13
-goto l2
+t5 = y + 1
+y = t5
 l1:
-t14 = z - 1
-z = t14
+i = 0
 l2:
-if condicion3 goto l3
+t6 = i < 10
+if t6 goto l3
 goto l4
 l3:
-z = -1
-goto l5
+goto l4
+t7 = i + 1
+i = t7
+goto l2
 l4:
-t16 = z + 2
-z = t16
-l5:
-t17 = sumar call x,y
-t18 = max_int call x,y
-t19 = promedio3 call 3,4,5
-t20 = factorial call 5
-t21 = prueba_break_continue call 10
-l6:
-t22 = contador < 5
-if t22 goto l7
-goto l8
-l7:
-t23 = contador + 1
-contador = t23
-goto l6
-l8:
-i = 0
-l9:
-t24 = i < 5
-if t24 goto l10
-goto l11
-l10:
-t25 = suma_for + i
-suma_for = t25
-t26 = i + 1
-i = t26
-goto l9
-l11:
-i = 0
-l12:
-t27 = i < 10
-if t27 goto l13
-goto l14
-l13:
-t28 = i % 2
-t29 = t28 != 0
-if t29 goto l15
-goto l16
-l15:
-goto l12
-l16:
-t30 = i > 6
-if t30 goto l17
-goto l18
-l17:
-goto l14
-l18:
-t31 = suma_pares + i
-suma_pares = t31
-t32 = i + 1
-i = t32
-goto l12
-l14:
-t33 = siguiente_char call c1
-c2 = t33
-t34 = siguiente_char call c3
-null = return 0
-null = return r
-t36 = a > b
-if t36 goto l19
-goto l20
-l19:
+null = return 0.5
+t8 = a + b
+null = return t8
+null = return 1
 null = return a
-goto l21
-l20:
-null = return b
-l21:
-t37 = a + b
-null = return prom
-l22:
-t40 = i < n
-if t40 goto l23
-goto l24
-l23:
-t41 = i + 1
-i = t41
-goto l22
-l24:
-i = 1
-l25:
-t42 = i <= n
-if t42 goto l26
-goto l27
-l26:
-t43 = res * i
-res = t43
-t44 = i + 1
-i = t44
-goto l25
-l27:
-null = return res
-l28:
-t45 = i < limite
-if t45 goto l29
-goto l30
-l29:
-t46 = i + 1
-i = t46
-t47 = i == 3
-if t47 goto l31
-goto l32
-l31:
-goto l28
-l32:
-t48 = i == 7
-if t48 goto l33
-goto l34
-l33:
-goto l30
-l34:
-t49 = suma + i
-suma = t49
-goto l28
-l30:
-null = return suma
-null = return r
+null = return 1.0

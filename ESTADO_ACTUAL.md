@@ -1,34 +1,34 @@
 # Estado actual del compilador (TecCompilacion2024)
 
-Última revisión: 07/12/2025
+Última revisión: 09/12/2025
 
 Este archivo resume el grado de cumplimiento frente a la consigna y define los próximos pasos mínimos para cerrarla.
 
 ## Resumen rápido
-- Léxico/sintaxis: gramática ANTLR4 operativa; errores léxicos/sintácticos se canalizan por listeners personalizados. No se construye AST propio, se trabaja sobre el ParseTree.
-- Semántica: tabla de símbolos con ámbitos, detección de no declarados/no inicializados/doble declaración. Sistema de tipos basado en `TipoDato` (int/double/char/void) aplicado a variables y funciones; firmas de funciones almacenadas y se valida compatibilidad prototipo/definición y cantidad de argumentos en llamadas. Warnings de no usado/no inicializado siguen activos.
-- Código intermedio: se generan tres direcciones para expresiones y control (if/while/for/break/continue). Llamadas a función ahora conservan todos los argumentos en la instrucción `call`.
+- Léxico/sintaxis: gramática ANTLR4 operativa; listeners léxico y sintáctico personalizados (`LexerErrorListener`, `ParserErrorListener`) envían errores al `Reportador` con colores. No se construye AST propio, se trabaja sobre el ParseTree impreso en consola.
+- Semántica: tabla de símbolos con ámbitos, detección de no declarados/no inicializados/doble declaración. Sistema de tipos `TipoDato` en variables y funciones; firmas se almacenan y se valida compatibilidad prototipo/definición y cantidad de argumentos. Persisten parámetros implícitos cuando falta declaración, no se valida tipo de argumentos ni tipo de `return`.
+- Código intermedio: tres direcciones para expresiones y control (if/while/for/break/continue, return). Las llamadas `call` conservan todos los argumentos en un string (sin temporales por argumento).
 - Optimización: propagación de constantes, constant folding, eliminación de subexpresiones comunes y eliminación de código muerto sobre temporales; iteran hasta punto fijo y se escribe `salida/codigo_optimizado.txt`.
-- Backend asm: NASM x86 funcional para int/char; `double` se trata como 32-bit (sin FPU/SSE real). Funciones sin prólogo/epílogo real; llamadas asumen un argumento y retorno en eax.
-- Reportes: mensajes centralizados en `Reportador` con colores ANSI (azul INFO, amarillo WARNING, rojo ERROR); tokens se vuelcan a `doc/Tokens.txt`.
+- Backend asm: NASM x86 para int/char; `double` tratado como 32-bit sin FPU/SSE. Sin prólogo/epílogo ni paso de argumentos por pila; `call` no consume argumentos y asume retorno en `eax`.
+- Reportes: mensajes centralizados en `Reportador` con colores ANSI; tabla de tokens en `doc/Tokens.txt`.
 
 ## Estado por requisito de la consigna
 
 1) Análisis léxico
-- Cumplido: gramática de tokens; tabla de tokens generada (`doc/Tokens.txt`).
-- Pendiente: listener léxico con mensajes coloreados y lexema problemático.
+- Cumplido: gramática de tokens; tabla de tokens generada (`doc/Tokens.txt`); listener léxico personalizado reporta lexema y usa colores vía `Reportador`.
+- Pendiente: nada crítico.
 
 2) Análisis sintáctico
-- Cumplido: parser ANTLR4, impresión de ParseTree (`toStringTree`), parseTree.png existente.
-- Pendiente: AST explícito (si lo exige la cátedra) y listener sintáctico con colores; actualmente se valida `;` y `}` desde `Escucha`.
+- Cumplido: parser ANTLR4, impresión de ParseTree (`toStringTree`), listener sintáctico personalizado envía errores al `Reportador`; validaciones básicas de `;` y `}` en `Escucha`.
+- Pendiente: AST explícito (si lo exige la cátedra).
 
 3) Análisis semántico
-- Cumplido: tabla de símbolos con scopes; errores por uso no declarado/no inicializado y doble declaración; warnings por no usado/no inicializado; mensajes centralizados con colores ANSI. Sistema de tipos con `TipoDato`, prototipos/definiciones almacenan firmas y se valida compatibilidad básica y cantidad de argumentos en llamadas.
-- Pendiente: inferencia y coerciones en expresiones/asignaciones/comparaciones; validar tipos de argumentos versus firma (falta conocer el tipo de cada expresión); validar `return` vs tipo declarado; eliminar parámetros implícitos que se siguen aceptando.
+- Cumplido: tabla de símbolos con scopes; errores por uso no declarado/no inicializado y doble declaración; warnings por no usado/no inicializado; mensajes centralizados con colores. Sistema de tipos con `TipoDato`; prototipos/definiciones almacenan firmas y se valida compatibilidad básica y cantidad de argumentos en llamadas.
+- Pendiente: inferencia y coerciones en expresiones/asignaciones/comparaciones; validar tipos de argumentos vs firma y tipo de `return`; remover registro de parámetros implícitos cuando falta declaración.
 
 4) Código intermedio (3 direcciones)
 - Cumplido: asignaciones, expresiones, if/while/for, break/continue, return; llamadas `call` conservan todos los argumentos; archivos `salida/codigo_intermedio.txt` y optimizado.
-- Pendiente: manejo formal de valores de retorno/convención y temporales para cada argumento si se requiere backend.
+- Pendiente: temporales/orden para argumentos si se quiere backend real; marcar valor de retorno de llamadas de forma compatible con convención.
 
 5) Optimización
 - Cumplido (≥3): propagación de constantes, constant folding, eliminación de subexpresiones comunes, eliminación de código muerto sobre temporales.
@@ -36,29 +36,24 @@ Este archivo resume el grado de cumplimiento frente a la consigna y define los p
 
 6) Salidas y reportes
 - Cumplido: intermedio, optimizado, asm en `salida/programa.asm`, tokens en `doc/Tokens.txt`; mensajes con colores ANSI.
-- Pendiente: opcional dump de mensajes a archivo.
+- Pendiente: opcional volcar mensajes a archivo.
 
 7) Subconjunto C++
-- Cubierto: tipos declarados en gramática; control `if/while/for/break/continue`; declaraciones, asignaciones, expresiones, llamadas y return. Limitación: `double` sin soporte real en backend y sin chequeo fuerte de tipos.
+- Cubierto: tipos declarados en gramática; control `if/while/for/break/continue`; declaraciones, asignaciones, expresiones, llamadas y return.
+- Limitaciones: backend sin soporte real de `double` ni convención de llamadas; chequeo de tipos débil en expresiones y llamadas.
 
 ## Próximas tareas mínimas para cumplir la consigna
 1) Tipos y funciones (crítico)
-- Inferir tipos en expresiones y validar asignaciones/comparaciones contra `TipoDato`; chequear tipos de argumentos según firma (hoy solo se valida cantidad) y validar `return` vs tipo declarado. Eliminar parámetros implícitos automáticos.
+- Inferir tipos en expresiones y validar asignaciones/comparaciones contra `TipoDato`; chequear tipos de argumentos según firma y validar `return` vs tipo declarado; eliminar parámetros implícitos automáticos.
 
-2) Reportes y errores (medio)
-- Listener léxico y sintáctico personalizados conectados a `Reportador` (línea/columna/lexema) y soporte opcional para volcar mensajes a archivo.
+2) Backend/CI para funciones (medio)
+- Implementar convención simple: prólogo/epílogo, paso de argumentos por pila, limpieza y retorno en `eax`; ajustar CI para temporales por argumento o documentar la limitación.
 
-3) Backend/CI para funciones (medio)
-- Backend: prólogo/epílogo simple (stack frame), pasar argumentos por pila, limpiar pila, respetar retorno en eax; al menos documentar limitaciones si no se implementa completo.
-
-4) Tipos numéricos (medio)
+3) Tipos numéricos (medio)
 - Definir política para `double`: implementar FPU/SSE básico o limitar formalmente a `int/char` y reflejarlo en la gramática/consigna.
 
-5) AST / visualización (si lo exigen)
-- Construir AST ligero y guardar DOT/PNG; o justificar uso directo de ParseTree.
-
-6) Optimización (opcional para plus)
-- Liveness completo para eliminar asignaciones no usadas en variables no temporales; alguna optimización simple de bucles (invariante fuera del loop).
+4) Optimización / salidas (opcional)
+- Liveness completo para eliminar asignaciones no usadas en variables no temporales; volcar mensajes a archivo si se requiere trazabilidad.
 
 ## Cómo validar
 - `mvn -q clean compile exec:java "-Dexec.mainClass=compiladores.App" "-Dexec.args=entrada/programa.txt"`

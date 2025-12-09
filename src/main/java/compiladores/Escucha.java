@@ -3,6 +3,7 @@ package compiladores;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ErrorNode;
 import org.antlr.v4.runtime.tree.TerminalNode;
+import org.antlr.v4.runtime.tree.ParseTreeProperty;
 import org.antlr.v4.runtime.Token;
 
 import compiladores.compiladoresParser.AsignacionContext;
@@ -16,6 +17,9 @@ import compiladores.compiladoresParser.IdfuncContext;
 import compiladores.compiladoresParser.ListaidfuncContext;
 import compiladores.compiladoresParser.ListafactfuncContext;
 import compiladores.compiladoresParser.LlamadafuncContext;
+import compiladores.compiladoresParser.Llamada_exprContext;
+import compiladores.compiladoresParser.ExpresionContext;
+import compiladores.compiladoresParser.IreturnContext;
 import compiladores.compiladoresParser.ProgramaContext;
 import compiladores.compiladoresParser.PrototipofuncContext;
 import java.util.List;
@@ -75,6 +79,53 @@ public class Escucha extends compiladoresBaseListener {
     private TipoDato tipoFuncionActual = null;
     /** Indica si estamos recorriendo la definición (con cuerpo) de una función. */
     private boolean enDeclaracionFuncion = false;
+    /** Tipos inferidos por nodo de expresión/factor. */
+    private final ParseTreeProperty<TipoDato> tipos = new ParseTreeProperty<>();
+
+    /** Devuelve true si el tipo es numérico (no void). */
+    private boolean esTipoNumerico(TipoDato t) {
+        return t == TipoDato.INT || t == TipoDato.DOUBLE || t == TipoDato.CHAR;
+    }
+
+    /** Promoción numérica simple: char->int->double. */
+    private TipoDato promocionar(TipoDato a, TipoDato b) {
+        if (a == null || b == null) {
+            return null;
+        }
+        if (a == TipoDato.DOUBLE || b == TipoDato.DOUBLE) {
+            return TipoDato.DOUBLE;
+        }
+        if (a == TipoDato.INT || b == TipoDato.INT) {
+            return TipoDato.INT;
+        }
+        return TipoDato.CHAR;
+    }
+
+    /** Valida asignación/coerción implícita ancho -> angosto. */
+    private boolean puedeAsignar(TipoDato destino, TipoDato origen) {
+        if (destino == null || origen == null) {
+            return false;
+        }
+        if (destino == origen) {
+            return true;
+        }
+        switch (destino) {
+            case DOUBLE:
+                return origen == TipoDato.INT || origen == TipoDato.CHAR;
+            case INT:
+                return origen == TipoDato.CHAR;
+            default:
+                return false;
+        }
+    }
+
+    /** Infere el tipo de un literal NUMERO según contenga decimal. */
+    private TipoDato tipoNumero(String lexema) {
+        if (lexema != null && lexema.contains(".")) {
+            return TipoDato.DOUBLE;
+        }
+        return TipoDato.INT;
+    }
 
     /**
      * Se invoca al entrar al nodo raíz del programa (inicio del parsing).
@@ -176,12 +227,15 @@ public class Escucha extends compiladoresBaseListener {
         tabla.addContexto();
         enDeclaracionFuncion = true;
 
-        // Tipo y nombre de la función (con fallback por si los getters regresan null).
-        String tipoFuncLexema = (ctx.tipofunc() != null) ? ctx.tipofunc().getText() : null;
-        if (tipoFuncLexema == null && ctx.getChildCount() > 0) {
-            tipoFuncLexema = ctx.getChild(0).getText();
-        }
+        // Tipo y nombre de la función (primer token del contexto).
+        String tipoFuncLexema = ctx.getStart() != null ? ctx.getStart().getText() : null;
         tipoFuncionActual = resolverTipo(tipoFuncLexema);
+
+        if (tipoFuncionActual == null) {
+            reportador.error("Error semantico: Tipo de retorno desconocido", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            errors++;
+            tipoFuncionActual = TipoDato.INT; // Fallback para evitar cascada de errores
+        }
 
         String nombreFunc = (ctx.ID() != null)
                 ? ctx.ID().getText()
@@ -219,7 +273,10 @@ public class Escucha extends compiladoresBaseListener {
 
     /** Traduce el lexema de tipo a {@link TipoDato}. */
     private TipoDato resolverTipo(String lexema) {
-        return TablaSimbolos.parseTipoDato(lexema);
+        if (lexema == null) {
+            return null;
+        }
+        return TablaSimbolos.parseTipoDato(lexema.trim());
     }
 
     /** Obtiene la lista de tipos declarados para los parámetros de una función. */
@@ -262,22 +319,6 @@ public class Escucha extends compiladoresBaseListener {
             }
         }
         return true;
-    }
-
-    private int contarArgumentos(FactorfuncContext ctx) {
-        if (ctx == null) {
-            return 0;
-        }
-        int cantidad = 0;
-        if (ctx.NUMERO() != null || ctx.ID() != null || ctx.expresion() != null) {
-            cantidad = 1;
-        }
-        ListafactfuncContext lista = ctx.listafactfunc();
-        while (lista != null && lista.getChildCount() > 0) {
-            cantidad++;
-            lista = lista.listafactfunc();
-        }
-        return cantidad;
     }
 
     /**
@@ -325,6 +366,75 @@ public class Escucha extends compiladoresBaseListener {
         param.setInicializado(true); // parámetros se consideran inicializados
         param.setUsado(false);
         tabla.addSimbolo(nombre, param);
+    }
+
+    /** Devuelve la lista de tipos de argumentos en una llamada. */
+    private java.util.List<TipoDato> recolectarTiposArgumentos(FactorfuncContext ctx) {
+        java.util.List<TipoDato> tiposArgs = new java.util.ArrayList<>();
+        if (ctx == null) {
+            return tiposArgs;
+        }
+
+        // Primer argumento
+        if (ctx.NUMERO() != null) {
+            tiposArgs.add(tipoNumero(ctx.NUMERO().getText()));
+        } else if (ctx.ID() != null) {
+            Id s = tabla.getSimbolo(ctx.ID().getText());
+            tiposArgs.add(s != null ? s.getTipoDato() : null);
+        } else if (ctx.expresion() != null) {
+            tiposArgs.add(tipos.get(ctx.expresion()));
+        }
+
+        // Argumentos adicionales
+        ListafactfuncContext lista = ctx.listafactfunc();
+        while (lista != null && lista.getChildCount() > 0) {
+            if (lista.NUMERO() != null) {
+                tiposArgs.add(tipoNumero(lista.NUMERO().getText()));
+            } else if (lista.ID() != null) {
+                Id s = tabla.getSimbolo(lista.ID().getText());
+                tiposArgs.add(s != null ? s.getTipoDato() : null);
+            } else if (lista.expresion() != null) {
+                tiposArgs.add(tipos.get(lista.expresion()));
+            }
+            lista = lista.listafactfunc();
+        }
+        return tiposArgs;
+    }
+
+    /** Valida la llamada y retorna el tipo de retorno de la función. */
+    private TipoDato validarLlamada(String nombre, FactorfuncContext argsCtx, int linea, int columna) {
+        Id simbolo = tabla.getSimbolo(nombre);
+        if (simbolo == null) {
+            reportador.error("Error semantico: Uso de un identificador no declarado", linea, columna);
+            errors++;
+            return null;
+        }
+        simbolo.setUsado(true);
+        if (!(simbolo instanceof Funcion)) {
+            reportador.error("Error semantico: Identificador no es funcion", linea, columna);
+            errors++;
+            return simbolo.getTipoDato();
+        }
+
+        Funcion f = (Funcion) simbolo;
+        java.util.List<TipoDato> tiposArgs = recolectarTiposArgumentos(argsCtx);
+        List<TipoDato> firma = f.getArgumentos();
+        if (firma != null && tiposArgs.size() != firma.size()) {
+            reportador.error("Error semantico: Cantidad de argumentos incompatible con la firma", linea, columna);
+            errors++;
+        }
+        if (firma != null) {
+            int limite = Math.min(firma.size(), tiposArgs.size());
+            for (int i = 0; i < limite; i++) {
+                TipoDato esperado = firma.get(i);
+                TipoDato recibido = tiposArgs.get(i);
+                if (!puedeAsignar(esperado, recibido)) {
+                    reportador.error("Error semantico: Tipo de argumento incompatible en posicion " + (i + 1), linea, columna);
+                    errors++;
+                }
+            }
+        }
+        return f.getTipoDato();
     }
     
     /**
@@ -514,11 +624,71 @@ public class Escucha extends compiladoresBaseListener {
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             } else {
-                // La variable destino está siendo asignada, marcarla como inicializada.
-                // La validación de variables no inicializadas en el lado derecho (expresión)
-                // se realiza en exitFactor() cuando se evalúa cada operando.
+                TipoDato tipoDestino = simbolo.getTipoDato();
+                TipoDato tipoOrigen = tipos.get(ctx.expresion());
+                if (tipoOrigen == null || tipoDestino == null || !puedeAsignar(tipoDestino, tipoOrigen)) {
+                    reportador.error("Error semantico: Tipo incompatible en asignacion", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                }
                 simbolo.setInicializado(true);
             }
+        }
+    }
+
+    @Override
+    public void exitExpresion(ExpresionContext ctx) {
+        super.exitExpresion(ctx);
+
+        // Caso base: factor
+        if (ctx.factor() != null) {
+            tipos.put(ctx, tipos.get(ctx.factor()));
+            return;
+        }
+
+        // Unarios: -expr o !expr
+        if (ctx.getChildCount() == 2 && ctx.expresion().size() == 1) {
+            TipoDato t = tipos.get(ctx.expresion(0));
+            if (!esTipoNumerico(t)) {
+                reportador.error("Error semantico: Operador unario aplicado a tipo no numerico", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
+            }
+            tipos.put(ctx, TipoDato.INT); // boolean modelado como int
+            return;
+        }
+
+        // Binarios
+        if (ctx.expresion().size() == 2) {
+            TipoDato izq = tipos.get(ctx.expresion(0));
+            TipoDato der = tipos.get(ctx.expresion(1));
+            String op = ctx.getChild(1).getText();
+
+            if (op.equals("&&") || op.equals("||")) {
+                if (!esTipoNumerico(izq) || !esTipoNumerico(der)) {
+                    reportador.error("Error semantico: Operador logico requiere operandos numericos", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                }
+                tipos.put(ctx, TipoDato.INT);
+                return;
+            }
+
+            if (op.equals("==") || op.equals("!=") || op.equals(">") || op.equals("<")
+                    || op.equals(">=") || op.equals("<=")) {
+                if (!esTipoNumerico(izq) || !esTipoNumerico(der)) {
+                    reportador.error("Error semantico: Comparacion requiere operandos numericos", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                }
+                tipos.put(ctx, TipoDato.INT);
+                return;
+            }
+
+            // Aritmeticos
+            if (!esTipoNumerico(izq) || !esTipoNumerico(der)) {
+                reportador.error("Error semantico: Operacion aritmetica requiere operandos numericos", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
+                tipos.put(ctx, null);
+                return;
+            }
+            tipos.put(ctx, promocionar(izq, der));
         }
     }
 
@@ -537,24 +707,13 @@ public class Escucha extends compiladoresBaseListener {
     @Override
     public void exitFactor(FactorContext ctx) {
         super.exitFactor(ctx);
+        TipoDato tipo = null;
         if (ctx.ID() != null) {
             String nombre = ctx.ID().getText();
             Id simbolo = tabla.getSimbolo(nombre);
             if (simbolo == null) {
-                // Dentro de una función, tratar IDs no declarados como parámetros implícitos.
-                if (tipoFuncionActual != null) {
-                    Variable param = new Variable();
-                    param.setNombre(nombre);
-                    param.setTipoDato(TipoDato.INT); // Tipo por defecto para parámetros implícitos
-                    param.setInicializado(true);
-                    param.setUsado(true);
-                    tabla.addSimbolo(nombre, param);
-                    System.out.println("[Escucha] Parametro implicito registrado en factor: " + nombre);
-                } else {
-                    System.out.println("[Escucha] exitFactor ID='" + nombre + "' -> no declarado");
-                    reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                    errors++;
-                }
+                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
             } else {
                 if (Boolean.FALSE.equals(simbolo.getInicializado())
                         && !(ctx.getParent() instanceof compiladoresParser.AsignacionContext
@@ -563,8 +722,19 @@ public class Escucha extends compiladoresBaseListener {
                     errors++;
                 }
                 simbolo.setUsado(true);
+                tipo = simbolo.getTipoDato();
             }
-        }  
+        } else if (ctx.NUMERO() != null) {
+            tipo = tipoNumero(ctx.NUMERO().getText());
+        } else if (ctx.CHAR_CONST() != null) {
+            tipo = TipoDato.CHAR;
+        } else if (ctx.expresion() != null) {
+            tipo = tipos.get(ctx.expresion());
+        } else if (ctx.llamada_expr() != null) {
+            tipo = tipos.get(ctx.llamada_expr());
+        }
+
+        tipos.put(ctx, tipo);
     }
     
     /**
@@ -612,20 +782,9 @@ public class Escucha extends compiladoresBaseListener {
             String nombre = ctx.ID().getText();
             Id simbolo = tabla.getSimbolo(nombre);
             if (simbolo == null) {
-                // En contexto de función, registrar también como parámetro implícito.
-                if (tipoFuncionActual != null) {
-                    Variable param = new Variable();
-                    param.setNombre(nombre);
-                    param.setTipoDato(TipoDato.INT);
-                    param.setInicializado(true);
-                    param.setUsado(true);
-                    tabla.addSimbolo(nombre, param);
-                    System.out.println("[Escucha] Parametro implicito registrado en factorfunc: " + nombre);
-                } else {
-                    System.out.println("[Escucha] exitFactorfunc ID='" + nombre + "' -> no declarado");
-                    reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                    errors++;
-                }
+                System.out.println("[Escucha] exitFactorfunc ID='" + nombre + "' -> no declarado");
+                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
             }
             else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
@@ -654,18 +813,8 @@ public class Escucha extends compiladoresBaseListener {
             String nombre = ctx.ID().getText();
             Id simbolo = tabla.getSimbolo(nombre);
             if (simbolo == null) {
-                if (tipoFuncionActual != null) {
-                    Variable param = new Variable();
-                    param.setNombre(nombre);
-                    param.setTipoDato(TipoDato.INT);
-                    param.setInicializado(true);
-                    param.setUsado(true);
-                    tabla.addSimbolo(nombre, param);
-                    System.out.println("[Escucha] Parametro implicito registrado en listafactfunc: " + nombre);
-                } else {
-                    reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                    errors++;
-                }
+                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
             }
             else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
                 reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
@@ -691,26 +840,52 @@ public class Escucha extends compiladoresBaseListener {
     public void exitLlamadafunc(LlamadafuncContext ctx) {
         super.exitLlamadafunc(ctx);
         if (ctx.llamada_expr() != null && ctx.llamada_expr().ID() != null) {
-            Id simbolo = tabla.getSimbolo(ctx.llamada_expr().ID().getText());
-            if (simbolo == null) {
-                reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;             
-            } else if (Boolean.FALSE.equals(simbolo.getInicializado())) {
-                reportador.error("Error semantico: Uso de un identificador no inicializado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                errors++;
-            } else {
-                simbolo.setUsado(true);
-                if (simbolo instanceof Funcion) {
-                    Funcion f = (Funcion) simbolo;
-                    int argumentosInvocados = contarArgumentos(ctx.llamada_expr().factorfunc());
-                    List<TipoDato> firma = f.getArgumentos();
-                    if (firma != null && !firma.isEmpty() && argumentosInvocados != firma.size()) {
-                        reportador.error("Error semantico: Cantidad de argumentos incompatible con la firma", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
-                        errors++;
-                    }
-                }
-            }
+            validarLlamada(ctx.llamada_expr().ID().getText(), ctx.llamada_expr().factorfunc(),
+                    ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
         } 
+    }
+
+    @Override
+    public void exitLlamada_expr(Llamada_exprContext ctx) {
+        super.exitLlamada_expr(ctx);
+        if (ctx.ID() != null) {
+            TipoDato retorno = validarLlamada(ctx.ID().getText(), ctx.factorfunc(),
+                    ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            if (retorno == TipoDato.VOID) {
+                reportador.error("Error semantico: Funcion void no retorna valor utilizable en expresiones", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
+            }
+            tipos.put(ctx, retorno);
+        }
+    }
+
+    @Override
+    public void exitIreturn(IreturnContext ctx) {
+        super.exitIreturn(ctx);
+        if (tipoFuncionActual == null) {
+            reportador.error("Error semantico: return fuera de una funcion", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            errors++;
+            return;
+        }
+
+        TipoDato tipoExpr = ctx.expresion() != null ? tipos.get(ctx.expresion()) : null;
+        if (tipoFuncionActual == TipoDato.VOID) {
+            if (tipoExpr != null) {
+                reportador.error("Error semantico: return con valor en funcion void", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
+            }
+            return;
+        }
+
+        if (tipoExpr == null) {
+            reportador.error("Error semantico: return sin valor en funcion no void", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            errors++;
+            return;
+        }
+        if (!puedeAsignar(tipoFuncionActual, tipoExpr)) {
+            reportador.error("Error semantico: Tipo de retorno incompatible", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            errors++;
+        }
     }
 
     /**
