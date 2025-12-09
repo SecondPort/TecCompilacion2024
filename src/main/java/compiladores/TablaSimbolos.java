@@ -37,6 +37,8 @@ public final class TablaSimbolos {
      * El último elemento de la lista representa el contexto actual (más interno).
      */
     private List<Map<String, Id>> ts;
+    /** Historial de todos los símbolos añadidos (para warnings posteriores). */
+    private List<Id> historial;
 
     /**
      * Constructor privado para prevenir instanciación directa (Patrón Singleton).
@@ -44,6 +46,7 @@ public final class TablaSimbolos {
      */
     private TablaSimbolos() {
         ts = new LinkedList<>();
+        historial = new LinkedList<>();
     }
     
     /**
@@ -126,7 +129,14 @@ public final class TablaSimbolos {
             // Otros contextos (externos) pueden tener el mismo nombre
             // para permitir sombreado y reutilización en funciones distintas.
             if (!contextoActual.containsKey(nombre)) {
+                if (id.getInicializado() == null) {
+                    id.setInicializado(false);
+                }
+                if (id.getUsado() == null) {
+                    id.setUsado(false);
+                }
                 contextoActual.put(nombre, id);
+                historial.add(id);
                 System.out.println("[TS] addSimbolo '" + nombre + "' en contexto=" + (ts.size()-1));
             }
         }
@@ -226,7 +236,14 @@ public final class TablaSimbolos {
         }
         Map<String, Id> global = ts.get(0);
         if (!global.containsKey(nombre)) {
+            if (id.getInicializado() == null) {
+                id.setInicializado(false);
+            }
+            if (id.getUsado() == null) {
+                id.setUsado(false);
+            }
             global.put(nombre, id);
+            historial.add(id);
             System.out.println("[TS] addSimboloGlobal '" + nombre + "'");
         }
     }
@@ -265,10 +282,8 @@ public final class TablaSimbolos {
      * @param consumidor acción a aplicar sobre cada {@link Id}
      */
     public void paraCadaSimbolo(java.util.function.Consumer<Id> consumidor) {
-        for (Map<String, Id> contexto : ts) {
-            for (Id id : contexto.values()) {
-                consumidor.accept(id);
-            }
+        for (Id id : historial) {
+            consumidor.accept(id);
         }
     }
 }

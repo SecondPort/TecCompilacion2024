@@ -1,19 +1,30 @@
-parametro1 = 100
-t0 = parametro1 + 5
-variableLocal = t0
-variableFantasma = 42
-miFuncion = 10
-valorGlobal = 3.14
-null = return variableLocal
-x = 10
-t1 = x + 5
-y = t1
-t2 = x + y
-w = t2
-t3 = miFuncion call 5,3.14
-resultado = t3
-t4 = resultado + 10
-valor = t4
-variableFinal = valor
-variableGlobal = valor
-null = return resultado
+x = 5
+t0 = d + 1
+t1 = sumar call a,d1
+t2 = sumar call a
+t3 = sinReturn call 10
+t4 = z > 0
+if t4 goto l0
+goto l1
+l0:
+t5 = y + 1
+y = t5
+l1:
+i = 0
+l2:
+t6 = i < 10
+if t6 goto l3
+goto l4
+l3:
+goto l4
+t7 = i + 1
+i = t7
+goto l2
+l4:
+null = return 0.5
+t8 = a + b
+null = return t8
+t9 = x + 1
+null = return 1
+null = return a
+null = return 1.0

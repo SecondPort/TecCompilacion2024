@@ -1,4 +1,25 @@
-null = return 105
-t3 = 10 call 5,3.14
-resultado = t3
-null = return resultado
+t1 = sumar call a,d1
+t2 = sumar call a
+t3 = sinReturn call 10
+t4 = z > 0
+if t4 goto l0
+goto l1
+l0:
+l1:
+i = 0
+l2:
+t6 = i < 10
+if t6 goto l3
+goto l4
+l3:
+goto l4
+t7 = i + 1
+i = t7
+goto l2
+l4:
+null = return 0.5
+t8 = a + b
+null = return t8
+null = return 1
+null = return a
+null = return 1.0

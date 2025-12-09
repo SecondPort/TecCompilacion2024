@@ -183,6 +183,9 @@ public class Escucha extends compiladoresBaseListener {
 
         // Generar warnings por símbolos no usados o no inicializados
         tabla.paraCadaSimbolo(id -> {
+            if (!(id instanceof Variable)) {
+                return; // No advertimos sobre funciones/prototipos.
+            }
             String nombre = id.getNombre();
             if (Boolean.FALSE.equals(id.getUsado())) {
                 reportador.warning("Identificador declarado pero no usado: " + nombre,
