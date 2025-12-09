@@ -154,6 +154,15 @@ public final class TablaSimbolos {
         return null;
     }
 
+    /** Devuelve el símbolo solo si está declarado en el contexto global. */
+    public Id getSimboloGlobal(String nombre) {
+        if (ts.isEmpty()) {
+            return null;
+        }
+        Map<String, Id> global = ts.get(0);
+        return global.get(nombre);
+    }
+
     /**
      * Verifica si un símbolo existe en alguno de los contextos visibles.
      * <p>
@@ -202,6 +211,26 @@ public final class TablaSimbolos {
         return false;
     }  
 
+    /** Indica si el contexto actual es el global (raíz). */
+    public boolean estaEnContextoGlobal() {
+        return ts.size() == 1;
+    }
+
+    /**
+     * Añade un símbolo directamente en el contexto global, respetando duplicados.
+     * Útil para registrar funciones sin que se eliminen al cerrar su bloque local.
+     */
+    public void addSimboloGlobal(String nombre, Id id) {
+        if (ts.isEmpty()) {
+            return;
+        }
+        Map<String, Id> global = ts.get(0);
+        if (!global.containsKey(nombre)) {
+            global.put(nombre, id);
+            System.out.println("[TS] addSimboloGlobal '" + nombre + "'");
+        }
+    }
+
     /**
      * Traduce un lexema de tipo a la enumeración interna.
      * Devuelve {@code null} si el lexema no corresponde a un tipo conocido.
@@ -217,6 +246,8 @@ public final class TablaSimbolos {
                 return TipoDato.DOUBLE;
             case "char":
                 return TipoDato.CHAR;
+            case "bool":
+                return TipoDato.BOOL;
             case "void":
                 return TipoDato.VOID;
             default:
@@ -464,5 +495,6 @@ enum TipoDato {
      * Tipo punto flotante de doble precisión (64 bits).
      */
     DOUBLE,
-    CHAR
+    CHAR,
+    BOOL
 }

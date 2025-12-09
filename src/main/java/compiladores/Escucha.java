@@ -84,7 +84,7 @@ public class Escucha extends compiladoresBaseListener {
 
     /** Devuelve true si el tipo es numérico (no void). */
     private boolean esTipoNumerico(TipoDato t) {
-        return t == TipoDato.INT || t == TipoDato.DOUBLE || t == TipoDato.CHAR;
+        return t == TipoDato.INT || t == TipoDato.DOUBLE || t == TipoDato.CHAR || t == TipoDato.BOOL;
     }
 
     /** Promoción numérica simple: char->int->double. */
@@ -97,6 +97,9 @@ public class Escucha extends compiladoresBaseListener {
         }
         if (a == TipoDato.INT || b == TipoDato.INT) {
             return TipoDato.INT;
+        }
+        if (a == TipoDato.BOOL || b == TipoDato.BOOL) {
+            return TipoDato.BOOL;
         }
         return TipoDato.CHAR;
     }
@@ -114,7 +117,9 @@ public class Escucha extends compiladoresBaseListener {
             case DOUBLE:
                 return origen == TipoDato.INT || origen == TipoDato.CHAR;
             case INT:
-                return origen == TipoDato.CHAR;
+                return origen == TipoDato.CHAR || origen == TipoDato.BOOL;
+            case BOOL:
+                return origen == TipoDato.BOOL || origen == TipoDato.CHAR || origen == TipoDato.INT;
             default:
                 return false;
         }
@@ -126,6 +131,15 @@ public class Escucha extends compiladoresBaseListener {
             return TipoDato.DOUBLE;
         }
         return TipoDato.INT;
+    }
+
+    /** Infere tipo para literales booleanos. */
+    private TipoDato tipoBooleano(String lexema) {
+        if (lexema == null) return null;
+        if (lexema.equals("true") || lexema.equals("false")) {
+            return TipoDato.BOOL;
+        }
+        return null;
     }
 
     /**
@@ -466,9 +480,14 @@ public class Escucha extends compiladoresBaseListener {
                 errors++;
                 return;
             }
+
+            boolean hayInicializacion = ctx.inicializacion() != null && ctx.inicializacion().getChildCount() > 0;
+            boolean esGlobal = tabla.estaEnContextoGlobal();
+
             nuevaVariable.setNombre(nombre);
             nuevaVariable.setTipoDato(tipo);
-            nuevaVariable.setInicializado(!ctx.getChild(2).getText().isBlank());
+            // En C las variables globales se consideran inicializadas en cero
+            nuevaVariable.setInicializado(esGlobal || hayInicializacion);
             tabla.addSimbolo(nombre, nuevaVariable);
         } else {
             reportador.error("Error semantico: Doble declaracion del mismo identificador", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
@@ -495,7 +514,7 @@ public class Escucha extends compiladoresBaseListener {
         super.exitPrototipofunc(ctx);
 
         String nombre = ctx.ID().getText();
-        Id existente = tabla.getSimbolo(nombre);
+        Id existente = tabla.getSimboloGlobal(nombre);
         TipoDato tipoRetorno = resolverTipo(ctx.getChild(0).getText());
         java.util.List<TipoDato> firma = extraerTiposParametros(ctx.idfunc());
 
@@ -510,8 +529,9 @@ public class Escucha extends compiladoresBaseListener {
             nuevaFuncion.setNombre(nombre);
             nuevaFuncion.setTipoDato(tipoRetorno);
             nuevaFuncion.setUsado(false);
+            nuevaFuncion.setInicializado(true);
             nuevaFuncion.setArgumentos(firma);
-            tabla.addSimbolo(nombre, nuevaFuncion);
+            tabla.addSimboloGlobal(nombre, nuevaFuncion);
         } else if (existente instanceof Funcion) {
             // Si ya hay una función con el mismo nombre, verificamos compatibilidad básica de tipo
             if (!firmasCompatibles((Funcion) existente, tipoRetorno, firma)) {
@@ -545,7 +565,7 @@ public class Escucha extends compiladoresBaseListener {
         super.exitDeclaracionfunc(ctx);
         if (ctx.ID() != null) {
             String nombre = ctx.ID().getText();
-            Id existente = tabla.getSimbolo(nombre);
+            Id existente = tabla.getSimboloGlobal(nombre);
             TipoDato tipoRetorno = resolverTipo(ctx.getChild(0).getText());
             java.util.List<TipoDato> firma = extraerTiposParametros(ctx.idfunc());
 
@@ -562,8 +582,9 @@ public class Escucha extends compiladoresBaseListener {
                 nuevaFuncion.setNombre(nombre);
                 nuevaFuncion.setTipoDato(tipoRetorno);
                 nuevaFuncion.setUsado(false);
+                nuevaFuncion.setInicializado(true);
                 nuevaFuncion.setArgumentos(firma);
-                tabla.addSimbolo(nombre, nuevaFuncion);
+                tabla.addSimboloGlobal(nombre, nuevaFuncion);
             } else if (existente instanceof Funcion) {
                 // Ya había un prototipo; verificamos que el tipo sea compatible
                 if (!firmasCompatibles((Funcion) existente, tipoRetorno, firma)) {
@@ -729,6 +750,8 @@ public class Escucha extends compiladoresBaseListener {
             tipo = tipoNumero(ctx.NUMERO().getText());
         } else if (ctx.CHAR_CONST() != null) {
             tipo = TipoDato.CHAR;
+        } else if (ctx.TRUE() != null || ctx.FALSE() != null) {
+            tipo = TipoDato.BOOL;
         } else if (ctx.expresion() != null) {
             tipo = tipos.get(ctx.expresion());
         } else if (ctx.llamada_expr() != null) {

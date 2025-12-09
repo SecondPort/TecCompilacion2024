@@ -55,9 +55,15 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
     @Override
     public String visitAsignacion(AsignacionContext ctx) {
         String id = ctx.ID().getText();
+        String destino = id;
+        // Soporte simple para asignación a arreglo: ID '[' expr ']'
+        if (ctx.dimensionAcceso() != null) {
+            String idx = visit(ctx.dimensionAcceso().expresion());
+            destino = id + "[" + idx + "]";
+        }
         String val = visit(ctx.expresion());
-        instrucciones.add(new Instruccion("=", val, null, id));
-        return id;
+        instrucciones.add(new Instruccion("=", val, null, destino));
+        return destino;
     }
 
     @Override
@@ -118,6 +124,12 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
     public String visitFactor(FactorContext ctx) {
         if (ctx.NUMERO() != null) return ctx.NUMERO().getText();
         if (ctx.CHAR_CONST() != null) return ctx.CHAR_CONST().getText();
+        if (ctx.TRUE() != null) return "true";
+        if (ctx.FALSE() != null) return "false";
+        if (ctx.ID() != null && ctx.getChildCount() >= 4 && "[".equals(ctx.getChild(1).getText())) {
+            String idx = visit(ctx.expresion());
+            return ctx.ID().getText() + "[" + idx + "]";
+        }
         if (ctx.ID() != null) return ctx.ID().getText();
         if (ctx.llamada_expr() != null) return visit(ctx.llamada_expr());
         if (ctx.expresion() != null) return visit(ctx.expresion());

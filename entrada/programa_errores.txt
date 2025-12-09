@@ -6,9 +6,9 @@ void testBreak();
 void testContinue();
 
 int main() {
-    int a = 1;
-    int b;
     int a;
+    int b;
+    int a=1;
     x = 5;
     int c = d + 1;
     double d1 = 2.5;

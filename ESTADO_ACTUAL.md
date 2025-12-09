@@ -46,3 +46,9 @@ Este archivo resume el grado de cumplimiento frente a la consigna y define los p
 - `mvn -q clean compile exec:java "-Dexec.mainClass=compiladores.App" "-Dexec.args=entrada/programa.txt"`
 - Revisar `salida/codigo_intermedio.txt`, `salida/codigo_optimizado.txt`, `salida/programa.asm`, y la sección "Mensajes del compilador" para confirmar cero errores y warnings esperados.
 
+CAMBIOS OBLIGATORIOS A IMPLEMENTAR
+
+corregir tabla de simbolos  categoria y ambito y si es privado funcion
+corregir funciones globales
+agregar bools
+arreglar deteccion de errores

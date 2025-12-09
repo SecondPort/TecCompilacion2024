@@ -31,6 +31,9 @@ OR : '||';
 INT : 'int';
 DOUBLE : 'double';
 CHAR : 'char';
+BOOL : 'bool';
+TRUE : 'true';
+FALSE : 'false';
 VOID : 'void';
 IF : 'if';
 ELSE : 'else';
@@ -46,44 +49,50 @@ CHAR_CONST : '\'' . '\'' ;
 
 ID : (LETRA | '_')(LETRA | DIGITO | '_')* ;
 
-WS : [ \t\n\r] -> skip ;
+LINE_COMMENT : '//' ~[\r\n]* -> skip ;
+BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
+WS : [ \t\n\r]+ -> skip ;
 
-programa : instrucciones EOF ;
+// Un programa al estilo C: solo declaraciones/prototipos/definiciones a nivel global.
+programa : toplevel* EOF ;
 
-instrucciones : instruccion instrucciones
-|
-;
+toplevel : declaracion      // variables globales
+		 | prototipofunc    // prototipos globales
+		 | declaracionfunc  // definiciones de función (solo globales)
+		 ;
+
+// Instrucciones permitidas dentro de funciones/bloques (no se permiten funciones anidadas).
+instrucciones : instruccion* ;
 
 instruccion : declaracion 
-|             asignacion
-|             bloque
-|             iif
-|             iwhile
-|             ifor
-|             ibreak
-|             icontinue
-|             prototipofunc
-|             declaracionfunc
-|             llamadafunc
-|             ireturn
-;
+			| asignacion
+			| bloque
+			| iif
+			| iwhile
+			| ifor
+			| ibreak
+			| icontinue
+			| llamadafunc
+			| ireturn
+			;
 
-declaracion : tipo ID inicializacion listaid PYC ;
+declaracion : tipo ID dimension? inicializacion listaid PYC ;
 
 tipo : INT
 |      DOUBLE
 |      CHAR
+|      BOOL
 ;
 
 inicializacion : ASIGN expresion
 |
 ;
 
-listaid : COMA ID inicializacion listaid
+listaid : COMA ID dimension? inicializacion listaid
 |
 ;
 
-asignacion : ID ASIGN expresion PYC ;
+asignacion : ID dimensionAcceso? ASIGN expresion PYC ;
 
 expresion
 	: expresion SUMA expresion
@@ -107,7 +116,10 @@ expresion
 factor
 	: NUMERO
 	| CHAR_CONST
+	| TRUE
+	| FALSE
 	| ID
+	| ID CA expresion CC
 	| PA expresion PC
 	| llamada_expr
 	;
@@ -156,6 +168,7 @@ ireturn : RETURN expresion? PYC ;
 tipofunc : INT
 |          DOUBLE 
 |          CHAR
+|          BOOL
 |          VOID
 ;
 
@@ -173,6 +186,9 @@ factorfunc : NUMERO listafactfunc
 |            ID listafactfunc
 |            PA expresion PC listafactfunc
 ;
+
+dimension : CA NUMERO CC ;
+dimensionAcceso : CA expresion CC ;
 
 listafactfunc: COMA NUMERO listafactfunc
 |              COMA ID listafactfunc

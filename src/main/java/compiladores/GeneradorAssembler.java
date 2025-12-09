@@ -48,7 +48,8 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
     private enum SimpleType {
         INT,
         DOUBLE,
-        CHAR;
+        CHAR,
+        BOOL;
 
         static SimpleType fromTipoLexema(String lex) {
             if (lex == null) {
@@ -57,6 +58,7 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
             lex = lex.trim();
             if ("double".equalsIgnoreCase(lex)) return DOUBLE;
             if ("char".equalsIgnoreCase(lex)) return CHAR;
+            if ("bool".equalsIgnoreCase(lex)) return BOOL;
             return INT;
         }
     }
@@ -88,6 +90,8 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
     private Map<String, SimpleType> tiposVariables;
     /** Tipos de retorno de funciones conocidas. */
     private Map<String, SimpleType> tiposFunciones;
+    /** Dimensiones declaradas para arreglos simples (tamaño en elementos). */
+    private Map<String, Integer> dimensiones;
     /** Contenedor de constantes inicializadas (.data) para literales double. */
     private StringBuilder seccionDatosInit;
     /** Contador de etiquetas de constante double. */
@@ -138,6 +142,7 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         this.offsetsVariables = new HashMap<>();
         this.tiposVariables = new HashMap<>();
         this.tiposFunciones = new HashMap<>();
+        this.dimensiones = new HashMap<>();
         this.offsetActual = 0;
         this.archivoSalida = archivoSalida;
         this.variablesDeclaradas = new HashSet<>();
@@ -310,21 +315,30 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
         String nombre = ctx.ID().getText();
         String tipoLexema = ctx.tipo().getText();
         SimpleType tipo = SimpleType.fromTipoLexema(tipoLexema);
+        int dimension = 1;
+        if (ctx.dimension() != null && ctx.dimension().NUMERO() != null) {
+            try {
+                dimension = Integer.parseInt(ctx.dimension().NUMERO().getText());
+            } catch (NumberFormatException e) {
+                dimension = 1;
+            }
+        }
         
         // Reservar espacio en la sección de datos solo si no ha sido declarada antes
         if (!variablesDeclaradas.contains(nombre)) {
             if (tipo == SimpleType.CHAR) {
-                seccionDatos.append("    ").append(nombre).append(": resb 1  ; char\n");
+                seccionDatos.append("    ").append(nombre).append(": resb ").append(dimension).append("  ; char\n");
             } else if (tipo == SimpleType.DOUBLE) {
-                seccionDatos.append("    ").append(nombre).append(": resq 1  ; double\n");
+                seccionDatos.append("    ").append(nombre).append(": resq ").append(dimension).append("  ; double\n");
             } else {
-                seccionDatos.append("    ").append(nombre).append(": resd 1  ; ")
+                seccionDatos.append("    ").append(nombre).append(": resd ").append(dimension).append("  ; ")
                            .append(tipoLexema).append("\n");
             }
             offsetsVariables.put(nombre, offsetActual);
-            offsetActual += (tipo == SimpleType.DOUBLE ? 8 : 4);
+            offsetActual += (tipo == SimpleType.DOUBLE ? 8 : 4) * dimension;
             variablesDeclaradas.add(nombre);
             tiposVariables.put(nombre, tipo);
+            dimensiones.put(nombre, dimension);
         }
         
         // Si tiene inicialización, generar código de asignación evaluando la expresion
@@ -373,11 +387,42 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
     public String visitAsignacion(AsignacionContext ctx) {
         String variable = ctx.ID().getText();
         SimpleType tipoDestino = tiposVariables.getOrDefault(variable, SimpleType.INT);
-        
-        codigo.append("\n    ; Asignación a ").append(variable).append("\n");
-        
+        boolean esArreglo = ctx.dimensionAcceso() != null;
+
+        codigo.append("\n    ; Asignación a ").append(variable).append(esArreglo ? " (arreglo)" : "").append("\n");
+
         // Evaluar la expresión del lado derecho
         SimpleType tipoExpr = visitExpresionConTipo(ctx.expresion());
+
+        if (esArreglo) {
+            String base = variable;
+            // dirección destino en EBX
+            SimpleType tipoBase = calcularDireccion(base, ctx.dimensionAcceso());
+            if (tipoBase == SimpleType.DOUBLE) {
+                if (tipoExpr == SimpleType.DOUBLE) {
+                    codigo.append("    fstp qword [ebx]\n");
+                } else {
+                    codigo.append("    push eax\n");
+                    codigo.append("    fild dword [esp]\n");
+                    codigo.append("    add esp, 4\n");
+                    codigo.append("    fstp qword [ebx]\n");
+                }
+            } else if (tipoBase == SimpleType.CHAR) {
+                if (tipoExpr == SimpleType.DOUBLE) {
+                    codigo.append("    sub esp, 4\n");
+                    codigo.append("    fistp dword [esp]\n");
+                    codigo.append("    pop eax\n");
+                }
+                codigo.append("    mov byte [ebx], al\n");
+            } else {
+                if (tipoExpr == SimpleType.DOUBLE) {
+                    codigo.append("    fistp dword [ebx]\n");
+                } else {
+                    codigo.append("    mov [ebx], eax\n");
+                }
+            }
+            return "";
+        }
 
         if (tipoDestino == SimpleType.DOUBLE) {
             materializarDoubleDesdeTipo(tipoExpr, variable);
@@ -393,7 +438,7 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
                 codigo.append("    mov [").append(variable).append("], eax\n");
             }
         }
-        
+
         return "";
     }
 
@@ -622,17 +667,37 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
             int ascii = (int) c;
             codigo.append("    mov eax, ").append(ascii).append("\n");
             return SimpleType.CHAR;
+        } else if (ctx.TRUE() != null) {
+            codigo.append("    mov eax, 1\n");
+            return SimpleType.BOOL;
+        } else if (ctx.FALSE() != null) {
+            codigo.append("    mov eax, 0\n");
+            return SimpleType.BOOL;
         } else if (ctx.ID() != null) {
-            String variable = ctx.ID().getText();
-            SimpleType t = tiposVariables.getOrDefault(variable, SimpleType.INT);
-            if (t == SimpleType.DOUBLE) {
-                codigo.append("    fld qword [").append(variable).append("]\n");
-            } else if (t == SimpleType.CHAR) {
-                codigo.append("    movzx eax, byte [").append(variable).append("]\n");
+            // Acceso simple o indexado
+            if (ctx.getChildCount() >= 4 && "[".equals(ctx.getChild(1).getText())) {
+                String base = ctx.ID().getText();
+                SimpleType tipoBase = calcularDireccion(base, (compiladoresParser.DimensionAccesoContext) null, ctx.expresion());
+                if (tipoBase == SimpleType.DOUBLE) {
+                    codigo.append("    fld qword [ebx]\n");
+                } else if (tipoBase == SimpleType.CHAR) {
+                    codigo.append("    movzx eax, byte [ebx]\n");
+                } else {
+                    codigo.append("    mov eax, [ebx]\n");
+                }
+                return tipoBase;
             } else {
-                codigo.append("    mov eax, [").append(variable).append("]\n");
+                String variable = ctx.ID().getText();
+                SimpleType t = tiposVariables.getOrDefault(variable, SimpleType.INT);
+                if (t == SimpleType.DOUBLE) {
+                    codigo.append("    fld qword [").append(variable).append("]\n");
+                } else if (t == SimpleType.CHAR) {
+                    codigo.append("    movzx eax, byte [").append(variable).append("]\n");
+                } else {
+                    codigo.append("    mov eax, [").append(variable).append("]\n");
+                }
+                return t;
             }
-            return t;
         } else if (ctx.llamada_expr() != null) {
             SimpleType t = visitLlamadaExprConTipo(ctx.llamada_expr());
             return t;
@@ -797,6 +862,52 @@ public class GeneradorAssembler extends compiladoresBaseVisitor<String> {
 
         SimpleType ret = tiposFunciones.getOrDefault(nombre, SimpleType.INT);
         return ret;
+    }
+
+    /**
+     * Calcula la dirección efectiva (en EBX) para un acceso a arreglo base[idx].
+     * Variante usada cuando hay DimensionAcceso en asignaciones.
+     */
+    private SimpleType calcularDireccion(String base, DimensionAccesoContext dimCtx) {
+        SimpleType tipoBase = tiposVariables.getOrDefault(base, SimpleType.INT);
+        SimpleType tipoIdx = visitExpresionConTipo(dimCtx.expresion());
+        if (tipoIdx == SimpleType.DOUBLE) {
+            codigo.append("    sub esp, 4\n");
+            codigo.append("    fistp dword [esp]\n");
+            codigo.append("    pop eax\n");
+        }
+        int size = (tipoBase == SimpleType.DOUBLE) ? 8 : (tipoBase == SimpleType.CHAR ? 1 : 4);
+        if (size == 8) {
+            codigo.append("    shl eax, 3\n");
+        } else if (size == 4) {
+            codigo.append("    shl eax, 2\n");
+        }
+        codigo.append("    lea ebx, [").append(base).append("]\n");
+        codigo.append("    add ebx, eax\n");
+        return tipoBase;
+    }
+
+    /**
+     * Variante para acceso a arreglo desde factor (usa expresion del factor).
+     */
+    private SimpleType calcularDireccion(String base, DimensionAccesoContext dimCtx, ExpresionContext idxExpr) {
+        // Reutiliza la misma lógica pero con la expresión provista
+        SimpleType tipoBase = tiposVariables.getOrDefault(base, SimpleType.INT);
+        SimpleType tipoIdx = visitExpresionConTipo(idxExpr);
+        if (tipoIdx == SimpleType.DOUBLE) {
+            codigo.append("    sub esp, 4\n");
+            codigo.append("    fistp dword [esp]\n");
+            codigo.append("    pop eax\n");
+        }
+        int size = (tipoBase == SimpleType.DOUBLE) ? 8 : (tipoBase == SimpleType.CHAR ? 1 : 4);
+        if (size == 8) {
+            codigo.append("    shl eax, 3\n");
+        } else if (size == 4) {
+            codigo.append("    shl eax, 2\n");
+        }
+        codigo.append("    lea ebx, [").append(base).append("]\n");
+        codigo.append("    add ebx, eax\n");
+        return tipoBase;
     }
 
     @Override
