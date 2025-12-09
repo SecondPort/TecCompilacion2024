@@ -9,7 +9,7 @@ Este archivo resume el grado de cumplimiento frente a la consigna y define los p
 - Semántica: tabla de símbolos con ámbitos, detección de no declarados/no inicializados/doble declaración. Sistema de tipos `TipoDato` en variables y funciones; firmas se almacenan y se valida compatibilidad prototipo/definición y cantidad de argumentos. Persisten parámetros implícitos cuando falta declaración, no se valida tipo de argumentos ni tipo de `return`.
 - Código intermedio: tres direcciones para expresiones y control (if/while/for/break/continue, return). Las llamadas `call` conservan todos los argumentos en un string (sin temporales por argumento).
 - Optimización: propagación de constantes, constant folding, eliminación de subexpresiones comunes y eliminación de código muerto sobre temporales; iteran hasta punto fijo y se escribe `salida/codigo_optimizado.txt`.
-- Backend asm: NASM x86 para int/char; `double` tratado como 32-bit sin FPU/SSE. Sin prólogo/epílogo ni paso de argumentos por pila; `call` no consume argumentos y asume retorno en `eax`.
+- Backend asm: NASM x86 para int/char/double; convención simple con prólogo/epílogo (ebp) y paso de argumentos por pila estilo cdecl; retorno en `eax` (int/char) o `st0` (double). `double` se maneja con x87.
 - Reportes: mensajes centralizados en `Reportador` con colores ANSI; tabla de tokens en `doc/Tokens.txt`.
 
 ## Estado por requisito de la consigna
@@ -40,17 +40,9 @@ Este archivo resume el grado de cumplimiento frente a la consigna y define los p
 
 7) Subconjunto C++
 - Cubierto: tipos declarados en gramática; control `if/while/for/break/continue`; declaraciones, asignaciones, expresiones, llamadas y return.
-- Limitaciones: backend sin soporte real de `double` ni convención de llamadas; chequeo de tipos débil en expresiones y llamadas.
+- Limitaciones: soporte de `double` básico con x87; chequeo de tipos aún débil en expresiones y llamadas; CI de llamadas no separa argumentos en temporales.
 
 ## Próximas tareas mínimas para cumplir la consigna
-1) Tipos y funciones (crítico)
-- Inferir tipos en expresiones y validar asignaciones/comparaciones contra `TipoDato`; chequear tipos de argumentos según firma y validar `return` vs tipo declarado; eliminar parámetros implícitos automáticos.
-
-2) Backend/CI para funciones (medio)
-- Implementar convención simple: prólogo/epílogo, paso de argumentos por pila, limpieza y retorno en `eax`; ajustar CI para temporales por argumento o documentar la limitación.
-
-3) Tipos numéricos (medio)
-- Definir política para `double`: implementar FPU/SSE básico o limitar formalmente a `int/char` y reflejarlo en la gramática/consigna.
 
 4) Optimización / salidas (opcional)
 - Liveness completo para eliminar asignaciones no usadas en variables no temporales; volcar mensajes a archivo si se requiere trazabilidad.

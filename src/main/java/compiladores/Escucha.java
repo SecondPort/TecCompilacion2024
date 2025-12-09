@@ -101,6 +101,7 @@ public class Escucha extends compiladoresBaseListener {
         return TipoDato.CHAR;
     }
 
+
     /** Valida asignación/coerción implícita ancho -> angosto. */
     private boolean puedeAsignar(TipoDato destino, TipoDato origen) {
         if (destino == null || origen == null) {
@@ -503,7 +504,6 @@ public class Escucha extends compiladoresBaseListener {
             errors++;
             return;
         }
-
         // Si no existe aún, lo registramos como prototipo
         if (existente == null) {
             Funcion nuevaFuncion = new Funcion();
@@ -554,6 +554,7 @@ public class Escucha extends compiladoresBaseListener {
                 errors++;
                 return;
             }
+            // se permite double en parámetros
 
             if (existente == null) {
                 // Definición sin prototipo previo
