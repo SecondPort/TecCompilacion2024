@@ -148,51 +148,149 @@ public class Optimizador {
      *                      se aplicará eliminación de código muerto in-place
      */
     private void eliminarCodigoMuerto(List<Instruccion> instrucciones) {
-        java.util.Set<String> vivos = new java.util.HashSet<>();
+        boolean cambio = true;
+        while (cambio) {
+            cambio = false;
 
-        for (int i = instrucciones.size() - 1; i >= 0; i--) {
-            Instruccion inst = instrucciones.get(i);
-
-            String op = inst.op;
-            String arg1 = inst.arg1;
-            String arg2 = inst.arg2;
-            String result = inst.result;
-
-            // 1) Cualquier uso de variables las marca como vivas
-            if (arg1 != null && !arg1.isEmpty()) {
-                vivos.add(arg1);
-            }
-            if (arg2 != null && !arg2.isEmpty()) {
-                vivos.add(arg2);
+            // Construye mapa de etiquetas para los saltos
+            Map<String, Integer> etiquetas = new HashMap<>();
+            for (int i = 0; i < instrucciones.size(); i++) {
+                Instruccion inst = instrucciones.get(i);
+                if ("label".equals(inst.op) && inst.result != null) {
+                    etiquetas.put(inst.result, i);
+                }
             }
 
-            // 2) Determinar si esta instrucción puede eliminarse
-            boolean esControlFlujo =
-                op.equals("label") ||
-                op.equals("goto") ||
-                op.equals("if") ||
-                op.equals("return") ||
-                op.equals("call");
+            // Dataflow de liveness con CFG explícito
+            List<java.util.Set<String>> in = new ArrayList<>(instrucciones.size());
+            List<java.util.Set<String>> out = new ArrayList<>(instrucciones.size());
+            for (int i = 0; i < instrucciones.size(); i++) {
+                in.add(new java.util.HashSet<>());
+                out.add(new java.util.HashSet<>());
+            }
 
-            boolean esAsignacion = !esControlFlujo && result != null && !result.isEmpty();
+            boolean actualizado = true;
+            while (actualizado) {
+                actualizado = false;
+                for (int i = instrucciones.size() - 1; i >= 0; i--) {
+                    Instruccion inst = instrucciones.get(i);
+                    java.util.Set<String> uso = obtenerUsos(inst);
+                    String def = obtenerDef(inst);
 
-            if (esAsignacion) {
-                boolean resultadoVivo = vivos.contains(result);
+                    java.util.Set<String> outActual = calcularSucesoresOut(in, etiquetas, i, instrucciones.size(), inst);
+                    java.util.Set<String> inNuevo = new java.util.HashSet<>(uso);
+                    java.util.Set<String> outMenosDef = new java.util.HashSet<>(outActual);
+                    if (def != null) {
+                        outMenosDef.remove(def);
+                    }
+                    inNuevo.addAll(outMenosDef);
 
-                // Heurística: solo eliminamos si el resultado nunca se usa
-                // y parece ser un temporal (por ejemplo, t0, t1, ...).
-                boolean esTemporal = result.startsWith("t");
+                    if (!outActual.equals(out.get(i)) || !inNuevo.equals(in.get(i))) {
+                        out.set(i, outActual);
+                        in.set(i, inNuevo);
+                        actualizado = true;
+                    }
+                }
+            }
 
-                if (!resultadoVivo && esTemporal) {
-                    instrucciones.remove(i);
-                    continue; // No actualizamos "vivos" con este resultado
+            // Pasada de eliminación usando in/out calculados
+            for (int i = instrucciones.size() - 1; i >= 0; i--) {
+                Instruccion inst = instrucciones.get(i);
+                String def = obtenerDef(inst);
+                if (def == null) {
+                    continue;
                 }
 
-                // Si la instrucción permanece, el resultado se define aquí y
-                // deja de ser necesario como "vivo" antes de este punto.
-                vivos.remove(result);
+                boolean usado = out.get(i).contains(def);
+                boolean esEliminable = instruccionPura(inst);
+
+                if (!usado && esEliminable) {
+                    instrucciones.remove(i);
+                    cambio = true;
+                }
             }
         }
+    }
+
+    private java.util.Set<String> obtenerUsos(Instruccion inst) {
+        java.util.Set<String> usos = new java.util.HashSet<>();
+        if (esVariable(inst.arg1)) usos.add(inst.arg1);
+        if (esVariable(inst.arg2)) usos.add(inst.arg2);
+
+        // Los argumentos de call vienen empaquetados en un string "a,b,c"
+        if ("call".equals(inst.op) && inst.arg2 != null) {
+            for (String token : inst.arg2.split(",")) {
+                token = token.trim();
+                if (esVariable(token)) {
+                    usos.add(token);
+                }
+            }
+        }
+        return usos;
+    }
+
+    private String obtenerDef(Instruccion inst) {
+        if (inst.result == null || inst.result.isEmpty()) return null;
+        return esVariable(inst.result) ? inst.result : null;
+    }
+
+    private boolean esVariable(String s) {
+        if (s == null || s.isEmpty()) return false;
+        if (isNumeric(s)) return false;
+        // Literales de char vienen con comillas simples
+        if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith("\"") && s.endsWith("\""))) return false;
+        // Etiquetas lX también deberían excluirse como variables
+        if (s.startsWith("l")) return false;
+        return true;
+    }
+
+    private boolean instruccionPura(Instruccion inst) {
+        String op = inst.op;
+        if (op == null) return false;
+
+        // Instrucciones con efectos de control o potenciales efectos externos no se tocan
+        if (op.equals("call") || op.equals("return") || op.equals("goto") || op.equals("if") || op.equals("label")) {
+            return false;
+        }
+        // El resto se considera una asignación pura (\n, +, -, *, /, %, !, ==, etc.)
+        return true;
+    }
+
+    private java.util.Set<String> calcularSucesoresOut(List<java.util.Set<String>> in,
+                                                       Map<String, Integer> etiquetas,
+                                                       int indice,
+                                                       int total,
+                                                       Instruccion inst) {
+        java.util.Set<String> resultado = new java.util.HashSet<>();
+        String op = inst.op;
+
+        // goto lX
+        if ("goto".equals(op) && inst.result != null && etiquetas.containsKey(inst.result)) {
+            resultado.addAll(in.get(etiquetas.get(inst.result)));
+            return resultado;
+        }
+
+        // if cond goto lX : flujo cae al siguiente y al destino
+        if ("if".equals(op)) {
+            if (inst.result != null && etiquetas.containsKey(inst.result)) {
+                resultado.addAll(in.get(etiquetas.get(inst.result)));
+            }
+            if (indice + 1 < total) {
+                resultado.addAll(in.get(indice + 1));
+            }
+            return resultado;
+        }
+
+        // return no tiene sucesores
+        if ("return".equals(op)) {
+            return resultado;
+        }
+
+        // resto: sucesor lineal
+        if (indice + 1 < total) {
+            resultado.addAll(in.get(indice + 1));
+        }
+        return resultado;
     }
 
     private boolean isNumeric(String s) {
