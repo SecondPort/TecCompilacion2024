@@ -1,4 +1,4 @@
-# Compilador de subconjunto C++ (TecCompilacion2024)
+# Compilador de subconjunto C++ 
 
 ## Portada
 - **Título**: Compilador de subconjunto C++
