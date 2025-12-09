@@ -1,160 +1,304 @@
-# TecCompilacion2024
+# Compilador de subconjunto C++ (TecCompilacion2024)
 
-## Descripción General del Proyecto
-Este es un proyecto de compilador construido con **ANTLR4** (v4.13.1) y **Java 17**. El compilador realiza análisis léxico, sintáctico, semántico y **generación de código ensamblador** sobre un lenguaje similar a C.
+## Portada
+- **Título**: Compilador de subconjunto C++
+- **Integrantes**: Lucas Manuel Moyano Gómez, Ignacio Jesús Olariaga Oliveto
+- **Materia**: Técnicas de Compilación
+- **Profesores**: Maximiliano Andrés Eschoyez, Francisco Ameri Lopez Lozano
+- **Fecha**: 11/12/2025
 
-## Arquitectura
+## Introducción
+Compilador académico construido con ANTLR4 (v4.13.1) y Java 17 para un subconjunto de C++ procedimental. Implementa análisis léxico, sintáctico, semántico, generación de código intermedio, optimización y backend NASM x86. Objetivos: ejercitar el pipeline completo de compilación, soportar tipos básicos (int, char, double), control de flujo y funciones con llamadas anidadas.
 
-### Límites de Componentes
-- **Definición de Gramática**: `src/main/antlr4/compiladores/compiladores.g4` - Gramática ANTLR4 que define la sintaxis del lenguaje
-- **Código Generado**: `target/generated-sources/antlr4/` - Clases auto-generadas de parser/lexer (NO editar manualmente)
-- **Patrón Listener**: `Escucha.java` extiende `compiladoresBaseListener` para análisis semántico durante el recorrido del árbol de parseo
-- **Patrón Visitor**: `Caminante.java` extiende `compiladoresBaseVisitor` para recorrido alternativo del árbol (actualmente usado para contar asignaciones)
-- **Generador de Código**: `GeneradorAssembler.java` extiende `compiladoresBaseVisitor` para generar código ensamblador NASM (x86)
-- **Tabla de Símbolos**: `TablaSimbolos.java` - Singleton que gestiona tablas de símbolos con ámbitos usando una pila de contextos
+## Análisis del Problema (subconjunto de C++)
+- Tipos: `int`, `char`, `double`, `void`.
+- Estructuras: declaraciones, asignaciones, expresiones aritméticas/lógicas, `if/else`, `while`, `for`, `break`, `continue`, `return`.
+- Funciones: prototipos y definiciones; llamadas con argumentos por valor; retornos `int/char/double/void`.
+- Sin clases, plantillas, herencia, ni manejo de memoria dinámica. IO no contemplada; el backend solo emite asm.
 
-### Flujo de Datos
-1. Archivo de entrada (`entrada/programa.txt`) → CharStream
-2. `compiladoresLexer` tokeniza la entrada
-3. `compiladoresParser` construye el árbol de parseo usando las reglas de gramática
-4. El listener `Escucha` recorre el árbol, realizando chequeos semánticos y poblando la tabla de símbolos
-5. Los mensajes de error se imprimen en stdout durante el recorrido
-6. El visitor `GeneradorAssembler` recorre el árbol y genera código ensamblador NASM (`salida/programa.asm`)
+## Diseño de la Solución
+- **Arquitectura general**: gramática ANTLR4 → lexer/parser generados → listener semántico (`Escucha`) → visitor de CI (`GeneradorCodigoIntermedio`) → optimizador (`Optimizador`) → backend NASM (`GeneradorAssembler`) → archivos en `salida/`.
+- **Fases de compilación**: léxico, sintáctico, semántico, CI, optimización, backend (ver resumen más abajo).
+- **Decisiones de diseño**:
+    - Backend x86 32 bits con convención cdecl simple (prólogo/epílogo `ebp`), retorno en `eax` o `st0` (double vía x87).
+    - Soporte de `double` implementado con x87; constantes en `.data`, variables en `.bss`.
+    - CI de llamadas empaqueta argumentos en string; el backend evalúa tipos en el árbol (no desde CI).
+    - Optimizador con liveness completo para eliminar asignaciones muertas (incluye no temporales), además de const-prop, folding y CSE.
 
-## Flujos de Trabajo Críticos
+## Implementación
+- **Detalles técnicos**: Java 17, Maven; ANTLR4 plugin genera lexer/parser en `target/generated-sources/antlr4/` (no editar). `Reportador` centraliza mensajes coloreados.
+- **Gramática ANTLR4**: `src/main/antlr4/compiladores/compiladores.g4` define tokens (NUMERO, ID, operadores, palabras clave) y reglas (programa, instrucciones, expresiones, control, funciones, llamadas). Genera `compiladoresLexer`, `compiladoresParser`, visitors/listeners base.
+- **Tabla de símbolos**: `TablaSimbolos` (singleton) con pila de contextos; guarda variables y funciones con tipo (`TipoDato`), inicialización, ámbito y firmas. `Escucha` gestiona alta/baja de contextos y chequeos (no declarado, doble declaración, no inicializado, firmas compatibles, conteo de argumentos).
+- **Algoritmos por fase**:
+    - Léxico/sintáctico: LL(*) de ANTLR sobre la gramática.
+    - Semántico: recorridos en `Escucha` con reglas de ámbito y tipo; validaciones básicas de argumentos y retorno.
+    - CI: `GeneradorCodigoIntermedio` emite tres direcciones (temporales `tN`, etiquetas `lN`) para expresiones, control y llamadas.
+    - Optimización: `Optimizador` aplica propagación de constantes, constant folding, CSE intra-bloque, y eliminación de código muerto vía liveness (CFG con etiquetas/if/goto).
+    - Backend: `GeneradorAssembler` visita el árbol con tipado simple (`int/char/double`), evalúa factores/expresiones, maneja llamadas, convierte int→double en retornos cuando es necesario y emite NASM.
+- **Técnicas de optimización implementadas**: propagación de constantes, constant folding, eliminación de subexpresiones comunes, liveness completo para eliminar asignaciones no usadas (temporales y no temporales).
 
-### Compilar y Generar el Parser
-```bash
-mvn clean compile
-```
-Esto activa el plugin Maven de ANTLR4 para regenerar el parser/lexer desde el archivo `.g4`. **Siempre ejecutar después de cambios en la gramática.**
+## Ejemplos y Pruebas
+- **Casos**: `entrada/programa.txt` (flujo completo sin errores), `entrada/programa_errores.txt` (muestra reportes semánticos). Hay más ejemplos en `entrada/` (if/else, while, for, aritmética).
+- **Salidas**: 
+    - CI: `salida/codigo_intermedio.txt`.
+    - CI optimizado: `salida/codigo_optimizado.txt`.
+    - ASM: `salida/programa.asm`.
+- **Código de prueba principal (`programa.txt`)**:
+```c
+int f(int x);int sumar(int a, int b);
+int max_int(int a, int b);
+double promedio3(int a, int b, int c);
+void contar_hasta(int n);
+int factorial(int n);
+int prueba_break_continue(int limite);
+char siguiente_char(char c);
 
-### Ejecutar el Compilador
-```bash
-mvn exec:java -Dexec.mainClass="compiladores.App"
-```
-Parsea `entrada/programa.txt` por defecto. Para cambiar la entrada, modificar la ruta hardcodeada en `App.java`:
-```java
-CharStream input = CharStreams.fromFileName("entrada/programa.txt");
-```
+int main() {
+    int x = 5;
+    int y = 10;
+    int z;
+    double d1 = 3.5;
+    double d2 = 2.0;
+    char c1 = 'A';
+    char c2;
 
-## Convenciones Específicas del Proyecto
+    z = x + y;
+    z = z - 3 * 2;
+    z = z / 3;
 
-### Gestión de la Tabla de Símbolos
-- **Contextos con ámbito**: Llamar `tabla.addContexto()` al entrar, `tabla.delContexto()` al salir de bloques
-- **Patrón Singleton**: Siempre usar `TablaSimbolos.getInstancia()` - nunca instanciar directamente
-- **Búsqueda local vs global**: Usar `contieneSimboloLocal()` para chequeos de doble declaración en el ámbito actual, `contieneSimbolo()` para validación de uso en todos los ámbitos
+    d1 = d1 + d2 * 2.0;
+    d1 = d1 / 2.5;
 
-### Patrón de Validación Semántica
-Todos los chequeos semánticos en `Escucha.java` siguen este patrón:
-```java
-@Override
-public void exitRuleName(RuleContext ctx) {
-    super.exitRuleName(ctx);  // Llamar al padre primero
-    
-    // 1. Validación semántica
-    Id simbolo = tabla.getSimbolo(ctx.ID().getText());
-    if (simbolo == null) {
-        // Reportar error con número de línea
-        System.out.println("Error semantico: ... (Linea: " + ctx.getStart().getLine() + ")");
-        errors++;
+    int condicion1 = (x < y);
+    int condicion2 = (z == 3);
+    int condicion3 = (x > y);
+    int condicion4 = (condicion1 && condicion2);
+    int condicion5 = (condicion3 || condicion2);
+    int condicion6 = !condicion3;
+
+    if (condicion4) {
+        z = z + 1;
+    } else {
+        z = z - 1;
     }
-    
-    // 2. Validación sintáctica (si es necesario)
-    Token lastToken = ctx.getStop();
-    if (lastToken == null || !lastToken.getText().equals(";")) {
-        System.out.println("Error sintáctico: ... (Línea: " + ctx.getStop().getLine() + ")");
+
+    if (condicion3) {
+        z = -1;
+    } else {
+        z = z + 2;
+    }
+
+    int suma = sumar(x, y);
+    int maximo = max_int(x, y);
+    double prom = promedio3(3, 4, 5);
+    int fact_5 = factorial(5);
+    int resultado_bc = prueba_break_continue(10);
+
+    int contador = 0;
+    while (contador < 5) {
+        contador = contador + 1;
+    }
+
+    int suma_for = 0;
+    int i;
+    for (i = 0; i < 5; i = i + 1) {
+        suma_for = suma_for + i;
+    }
+
+    int suma_pares = 0;
+    for (i = 0; i < 10; i = i + 1) {
+        if (i % 2 != 0) {
+            continue;
+        }
+        if (i > 6) {
+            break;
+        }
+        suma_pares = suma_pares + i;
+    }
+
+    c2 = siguiente_char(c1);
+    char c3 = 'z';
+    char c4 = siguiente_char(c3);
+
+    return 0;
+}
+
+int sumar(int a, int b) {
+    int r = a + b;
+    return r;
+}
+
+int max_int(int a, int b) {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
     }
 }
+
+double promedio3(int a, int b, int c) {
+    int suma = a + b + c;
+    double prom = suma / 3;
+    return prom;
+}
+
+void contar_hasta(int n) {
+    int i = 0;
+    while (i < n) {
+        i = i + 1;
+    }
+}
+
+int factorial(int n) {
+    int res = 1;
+    int i;
+    for (i = 1; i <= n; i = i + 1) {
+        res = res * i;
+    }
+    return res;
+}
+
+int prueba_break_continue(int limite) {
+    int i = 0;
+    int suma = 0;
+
+    while (i < limite) {
+        i = i + 1;
+
+        if (i == 3) {
+            continue;
+        }
+
+        if (i == 7) {
+            break;
+        }
+
+        suma = suma + i;
+    }
+
+    return suma;
+}
+
+char siguiente_char(char c) {
+    char r = c + 1;
+    return r;
+}
 ```
-
-### Directrices para Extensión de Gramática
-- **Tokens terminales**: Definir en MAYÚSCULAS (ej., `INT`, `WHILE`, `PYC`)
-- **Reglas**: Definir en minúsculas (ej., `programa`, `declaracion`, `expresion`)
-- **Fragmentos**: Usar solo para clases de caracteres (ej., `fragment LETRA  [A-Za-z];`)
-- La generación de Parser/Visitor está habilitada en `pom.xml` - ambos patrones están disponibles pero Listener es el primario
-
-## Pruebas
-Los archivos de prueba de entrada están en el directorio `entrada/`. El archivo de prueba actual (`programa.txt`) intencionalmente contiene errores:
-- Punto y coma faltantes
-- Uso de variable no declarada (`b`)
-- Uso de variable no inicializada (`j` en bucle for)
-
-## Errores Comunes
-- **No editar archivos generados** en `target/` o `src/main/antlr4/compiladores/*.java`
-- **La pila de contextos debe estar balanceada**: Cada `addContexto()` necesita un `delContexto()` correspondiente
-- **Inicialización de variables**: Rastrear mediante `setInicializado()` en la declaración, chequear antes de usar
-- La ruta del archivo de entrada está hardcodeada - actualizar `App.java` para archivos de prueba diferentes
-
-## Generación de Código Ensamblador
-
-### Arquitectura de Generación
-El generador produce código ensamblador en sintaxis **NASM para x86** (32 bits) con las siguientes características:
-- **Variables**: Se almacenan en la sección `.bss` (datos no inicializados)
-- **Expresiones**: Se evalúan usando registros `EAX`, `EBX` como acumuladores y la pila para operandos temporales
-- **Estructuras de control**: Se implementan con etiquetas y saltos condicionales (`je`, `jne`, `jmp`, etc.)
-- **Operaciones soportadas**: 
-  - Aritméticas: suma, resta, multiplicación, división, módulo
-  - Comparaciones: `==`, `!=`, `>`, `<`
-  - Control de flujo: `if-else`, `while`, `for`
-
-### Ejemplo de Traducción
+- **Código con errores (`programa_errores.txt`)**:
 ```c
-// Código fuente
-int x = 5;
-int y = 10;
-int z;
-z = x + y * 2;
-```
+int sumar(int a, int b);
+int sinReturn(int x);
+void g();
+int h(int a);
+void testBreak();
+void testContinue();
 
+int main() {
+    int a = 1;
+    int b;
+    int a;
+    x = 5;
+    int c = d + 1;
+    double d1 = 2.5;
+    double d2 = 1;
+    int e = d1;
+    char ch = 'A';
+    int r1 = sumar(a, d1);
+    int r2 = sumar(a);
+    int r3 = sinReturn(10);
+    if (z > 0) {
+        int y;
+        y = y + 1;
+    }
+    for (i = 0; i < 10; i = i + 1) {
+        break;
+    }
+    return 0.5;
+}
+
+int sumar(int a, int b) {
+    return a + b;
+}
+
+int sinReturn(int x) {
+    int y = x + 1;
+}
+
+void g() {
+    return 1;
+}
+
+int h(int a) {
+    return a;
+}
+
+double h(int a) {
+    return 1.0;
+}
+
+void testBreak() {
+    break;
+}
+
+void testContinue() {
+    continue;
+}
+```
+- **Análisis**: `programa.txt` compila sin errores y genera ASM coherente con operaciones int/double y control de flujo; `programa_errores.txt` reporta dobles declaraciones, no declarados, no inicializados y firmas incompatibles.
+
+## Dificultades Encontradas y Soluciones Aplicadas
+- Manejo de `double`: se resolvió con x87, constantes en `.data` y conversión int→double en retornos/asignaciones.
+- Tipado de llamadas: el CI conserva args como string; el backend evalúa tipos desde el árbol para empujar 4/8 bytes.
+- Liveness: se implementó un CFG con etiquetas/if/goto para evitar eliminar asignaciones necesarias en no temporales.
+
+## Conclusiones
+Se completó un pipeline funcional de compilación para un subconjunto de C++: lexer/parser ANTLR, semántica con tabla de símbolos, CI, optimización y backend NASM con soporte de `double`. Quedan como mejoras posibles: tipado más estricto en llamadas/expresiones en CI, generación de temporales por argumento, y optimizaciones adicionales de bucles.
+
+## Referencias Bibliográficas
+- Aho, Lam, Sethi, Ullman. *Compilers: Principles, Techniques, and Tools*.
+- Dick Grune et al. *Modern Compiler Design* (para referencia complementaria).
+- Alfred V. Aho, Jeffrey D. Ullman. *Construcción de Compiladores*.
+
+## Anexo (notas y comandos útiles)
+- **Instrucciones de uso**:
+    - Compilar y regenerar parser: `mvn clean compile`.
+    - Ejecutar compilador con entrada por defecto: `mvn -q exec:java "-Dexec.mainClass=compiladores.App" "-Dexec.args=entrada/programa.txt"`.
+    - Cambiar archivo de entrada: sustituir la ruta en `-Dexec.args` por cualquier archivo en `entrada/`.
+    - Ensamblar/ejecutar en Linux: `nasm -f elf32 salida/programa.asm -o salida/programa.o && ld -m elf_i386 salida/programa.o -o salida/programa`.
+- **Arquitectura y flujo (detalle)**:
+    - Gramática ANTLR4 en `src/main/antlr4/compiladores/compiladores.g4` → genera `compiladoresLexer`/`Parser` en `target/generated-sources/antlr4/`.
+    - Listener semántico `Escucha` valida ámbitos, tipos y firmas; usa `TablaSimbolos` (singleton con pila de contextos).
+    - Visitor `GeneradorCodigoIntermedio` emite tres direcciones (temporales `tN`, etiquetas `lN`) hacia `salida/codigo_intermedio.txt`.
+    - `Optimizador` aplica const-prop, folding, CSE y liveness para `salida/codigo_optimizado.txt`.
+    - Backend `GeneradorAssembler` produce NASM x86 con soporte `int/char/double` (x87) en `salida/programa.asm`.
+- **Convenciones y guías rápidas**:
+    - No editar archivos generados en `target/`.
+    - Siempre balancear `addContexto()/delContexto()` al entrar/salir de bloques.
+    - Tokens en MAYÚSCULAS, reglas en minúsculas; fragmentos solo para clases de caracteres.
+    - Backend: cdecl simple, prólogo/epílogo con `ebp`; retorno en `eax` (int/char) o `st0` (double).
+- **Ejemplo de traducción ASM (fragmento)**:
 ```nasm
-; Código ensamblador generado
 section .bss
-    x: resd 1  ; int
-    y: resd 1  ; int
-    z: resd 1  ; int
+        x: resd 1
+        y: resd 1
+        z: resd 1
 
 section .text
 _start:
-    ; Inicialización de x
-    mov dword [x], 5
-    ; Inicialización de y
-    mov dword [y], 10
-
-    ; Asignación a z
-    mov eax, [x]
-    push eax
-    mov eax, [y]
-    push eax
-    mov eax, 2
-    mov ebx, eax
-    pop eax
-    imul eax, ebx  ; multiplicación
-    mov ebx, eax
-    pop eax
-    add eax, ebx  ; suma
-    mov [z], eax
+        mov dword [x], 5
+        mov dword [y], 10
+        ; z = x + y
+        mov eax, [x]
+        push eax
+        mov eax, [y]
+        pop ebx
+        add eax, ebx
+        mov [z], eax
 ```
-
-### Archivo de Salida
-El código ensamblador generado se guarda en: `salida/programa.asm`
-
-### Ensamblar y Ejecutar (Linux)
-```bash
-# Ensamblar con NASM
-nasm -f elf32 salida/programa.asm -o salida/programa.o
-
-# Enlazar
-ld -m elf_i386 salida/programa.o -o salida/programa
-
-# Ejecutar
-./salida/programa
-```
-
-## Archivos Clave para Referencia
-- Reglas de gramática: `src/main/antlr4/compiladores/compiladores.g4`
-- Análisis semántico: `src/main/java/compiladores/Escucha.java`
-- Generación de código: `src/main/java/compiladores/GeneradorAssembler.java`
-- Estructura de tabla de símbolos: `src/main/java/compiladores/TablaSimbolos.java`
-- Entrada de prueba: `entrada/programa.txt`
-- Salida de ensamblador: `salida/programa.asm`
+- **Resumen de las 6 fases**:
+    - 1) Léxico: `compiladoresLexer` tokeniza y detecta caracteres inválidos.
+    - 2) Sintáctico: `compiladoresParser` valida la estructura y construye el parse tree.
+    - 3) Semántico: `Escucha` verifica tipos, ámbitos, inicialización y firmas; llena la tabla de símbolos.
+    - 4) Código intermedio: `GeneradorCodigoIntermedio` produce tres direcciones (temporales/etiquetas).
+    - 5) Optimización: `Optimizador` ejecuta const-prop, folding, CSE y liveness para eliminar código muerto.
+    - 6) Generación de código: `GeneradorAssembler` emite NASM x86 (int/char/double con x87).
