@@ -10,6 +10,10 @@ import compiladores.compiladoresParser.AsignacionContext;
 import compiladores.compiladoresParser.BloqueContext;
 import compiladores.compiladoresParser.DeclaracionContext;
 import compiladores.compiladoresParser.DeclaracionfuncContext;
+import compiladores.compiladoresParser.IbreakContext;
+import compiladores.compiladoresParser.IcontinueContext;
+import compiladores.compiladoresParser.IforContext;
+import compiladores.compiladoresParser.IwhileContext;
 import compiladores.compiladoresParser.FactorContext;
 import compiladores.compiladoresParser.FactorfuncContext;
 import compiladores.compiladoresParser.FinforContext;
@@ -81,6 +85,11 @@ public class Escucha extends compiladoresBaseListener {
     private boolean enDeclaracionFuncion = false;
     /** Tipos inferidos por nodo de expresión/factor. */
     private final ParseTreeProperty<TipoDato> tipos = new ParseTreeProperty<>();
+
+    /** Profundidad actual de estructuras repetitivas para validar break/continue. */
+    private int profundidadBucles = 0;
+    /** Marca si se encontró al menos un return en la función actual. */
+    private boolean retornoEncontrado = false;
 
     /** Devuelve true si el tipo es numérico (no void). */
     private boolean esTipoNumerico(TipoDato t) {
@@ -241,6 +250,7 @@ public class Escucha extends compiladoresBaseListener {
         // Abrimos un contexto propio de la función.
         tabla.addContexto();
         enDeclaracionFuncion = true;
+        retornoEncontrado = false;
 
         // Tipo y nombre de la función (primer token del contexto).
         String tipoFuncLexema = ctx.getStart() != null ? ctx.getStart().getText() : null;
@@ -253,8 +263,25 @@ public class Escucha extends compiladoresBaseListener {
         }
 
         String nombreFunc = (ctx.ID() != null)
-                ? ctx.ID().getText()
-                : extraerPrimerId(ctx);
+            ? ctx.ID().getText()
+            : extraerPrimerId(ctx);
+        if ("<sin_nombre>".equals(nombreFunc) && ctx.getChildCount() > 1) {
+            nombreFunc = ctx.getChild(1).getText();
+        }
+
+        // Registrar la función en el ámbito global para permitir referencias dentro de su propio cuerpo.
+        if (nombreFunc != null && !"<sin_nombre>".equals(nombreFunc)) {
+            Id existente = tabla.getSimboloGlobal(nombreFunc);
+            if (existente == null) {
+                Funcion f = new Funcion();
+                f.setNombre(nombreFunc);
+                f.setTipoDato(tipoFuncionActual);
+                f.setInicializado(true);
+                f.setUsado(false);
+                f.setArgumentos(extraerTiposParametros(ctx.idfunc()));
+                tabla.addSimboloGlobal(nombreFunc, f);
+            }
+        }
 
         System.out.println("[Escucha] enterDeclaracionfunc tipo=" + tipoFuncionActual + " nombre=" + nombreFunc);
     }
@@ -483,6 +510,14 @@ public class Escucha extends compiladoresBaseListener {
 
             boolean hayInicializacion = ctx.inicializacion() != null && ctx.inicializacion().getChildCount() > 0;
             boolean esGlobal = tabla.estaEnContextoGlobal();
+            TipoDato tipoInicializacion = null;
+            if (hayInicializacion && ctx.inicializacion().expresion() != null) {
+                tipoInicializacion = tipos.get(ctx.inicializacion().expresion());
+                if (tipoInicializacion != null && !puedeAsignar(tipo, tipoInicializacion)) {
+                    reportador.error("Error semantico: Tipo incompatible en inicializacion", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                }
+            }
 
             nuevaVariable.setNombre(nombre);
             nuevaVariable.setTipoDato(tipo);
@@ -546,6 +581,48 @@ public class Escucha extends compiladoresBaseListener {
         }
     }
 
+    @Override
+    public void enterIwhile(IwhileContext ctx) {
+        super.enterIwhile(ctx);
+        profundidadBucles++;
+    }
+
+    @Override
+    public void exitIwhile(IwhileContext ctx) {
+        super.exitIwhile(ctx);
+        profundidadBucles = Math.max(0, profundidadBucles - 1);
+    }
+
+    @Override
+    public void enterIfor(IforContext ctx) {
+        super.enterIfor(ctx);
+        profundidadBucles++;
+    }
+
+    @Override
+    public void exitIfor(IforContext ctx) {
+        super.exitIfor(ctx);
+        profundidadBucles = Math.max(0, profundidadBucles - 1);
+    }
+
+    @Override
+    public void exitIbreak(IbreakContext ctx) {
+        super.exitIbreak(ctx);
+        if (profundidadBucles <= 0) {
+            reportador.error("Error semantico: break fuera de un bucle", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            errors++;
+        }
+    }
+
+    @Override
+    public void exitIcontinue(IcontinueContext ctx) {
+        super.exitIcontinue(ctx);
+        if (profundidadBucles <= 0) {
+            reportador.error("Error semantico: continue fuera de un bucle", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            errors++;
+        }
+    }
+
     /**
      * Se invoca al salir de una declaración completa de función (con cuerpo).
      * <p>
@@ -563,8 +640,11 @@ public class Escucha extends compiladoresBaseListener {
     @Override
     public void exitDeclaracionfunc(DeclaracionfuncContext ctx) {
         super.exitDeclaracionfunc(ctx);
-        if (ctx.ID() != null) {
-            String nombre = ctx.ID().getText();
+        String nombre = ctx.ID() != null ? ctx.ID().getText() : extraerPrimerId(ctx);
+        if ("<sin_nombre>".equals(nombre) && ctx.getChildCount() > 1) {
+            nombre = ctx.getChild(1).getText();
+        }
+        if (nombre != null && !"<sin_nombre>".equals(nombre)) {
             Id existente = tabla.getSimboloGlobal(nombre);
             TipoDato tipoRetorno = resolverTipo(ctx.getChild(0).getText());
             java.util.List<TipoDato> firma = extraerTiposParametros(ctx.idfunc());
@@ -599,10 +679,17 @@ public class Escucha extends compiladoresBaseListener {
             }
         }
 
+        // Validar que funciones no void tengan al menos un return
+        if (tipoFuncionActual != null && tipoFuncionActual != TipoDato.VOID && !retornoEncontrado) {
+            reportador.error("Error semantico: Funcion sin sentencia return", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
+            errors++;
+        }
+
         // Al salir de la función cerramos el contexto de parámetros/variables locales
         tabla.delContexto();
         tipoFuncionActual = null;
         enDeclaracionFuncion = false;
+        retornoEncontrado = false;
     }
 
     /**
@@ -642,8 +729,17 @@ public class Escucha extends compiladoresBaseListener {
         if (ctx.ID() != null) {
             Id simbolo = tabla.getSimbolo(ctx.ID().getText());
             if (simbolo == null) {
+                Id simboloGlobal = tabla.getSimboloGlobal(ctx.ID().getText());
+                if (simboloGlobal instanceof Funcion) {
+                    reportador.error("Error semantico: No se puede asignar a una funcion", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                    errors++;
+                    return;
+                }
                 // La variable destino debe estar declarada previamente
                 reportador.error("Error semantico: Uso de un identificador no declarado", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+                errors++;
+            } else if (simbolo instanceof Funcion) {
+                reportador.error("Error semantico: No se puede asignar a una funcion", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
                 errors++;
             } else {
                 TipoDato tipoDestino = simbolo.getTipoDato();
@@ -910,6 +1006,7 @@ public class Escucha extends compiladoresBaseListener {
             reportador.error("Error semantico: Tipo de retorno incompatible", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
             errors++;
         }
+        retornoEncontrado = true;
     }
 
     /**
