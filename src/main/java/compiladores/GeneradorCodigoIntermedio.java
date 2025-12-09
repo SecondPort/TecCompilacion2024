@@ -126,6 +126,7 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
     @Override
     public String visitIif(IifContext ctx) {
+        // Estructura: if cond goto Ltrue, goto Lfalse, label Ltrue, bloque, [else], label Lend/Lfalse
         String cond = visit(ctx.condicion());
         String labelTrue = newLabel();
         String labelFalse = newLabel();
@@ -154,6 +155,7 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
     @Override
     public String visitIwhile(IwhileContext ctx) {
+        // Estructura: label Lstart, if cond goto Lbody, goto Lend, label Lbody, bloque, goto Lstart, label Lend
         String labelStart = newLabel();
         String labelTrue = newLabel();
         String labelEnd = newLabel();
@@ -247,6 +249,7 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
     // Helper for for-loop update step
     @Override
     public String visitFinfor(FinforContext ctx) {
+        // Maneja la parte de incremento del for: expresion, ID++/-- o asignacion
         // Caso 1: expresión genérica como actualización (se evalúa y se descarta)
         if (ctx.expresion() != null && ctx.ASIGN() == null && ctx.ID() == null) {
             return visit(ctx.expresion());
@@ -289,6 +292,7 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
     @Override
     public String visitLlamada_expr(compiladoresParser.Llamada_exprContext ctx) {
+        // Genera instruccion call con args empaquetados en string (backend reinterpreta tipos)
         String nombre = ctx.ID().getText();
         String resultado = newTemp();
         String argsTemp = visit(ctx.factorfunc());
@@ -298,6 +302,7 @@ public class GeneradorCodigoIntermedio extends compiladoresBaseVisitor<String> {
 
     @Override
     public String visitFactorfunc(FactorfuncContext ctx) {
+        // Construye lista de argumentos como string separado por comas en orden de aparición
         List<String> args = new ArrayList<>();
         if (ctx.NUMERO() != null) {
             args.add(ctx.NUMERO().getText());

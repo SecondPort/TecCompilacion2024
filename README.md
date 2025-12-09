@@ -17,13 +17,38 @@ Compilador académico construido con ANTLR4 (v4.13.1) y Java 17 para un subconju
 - Sin clases, plantillas, herencia, ni manejo de memoria dinámica. IO no contemplada; el backend solo emite asm.
 
 ## Diseño de la Solución
+La solución se estructuró siguiendo el pipeline clásico de compilación, pero adaptado a las restricciones del trabajo práctico.
+
 - **Arquitectura general**: gramática ANTLR4 → lexer/parser generados → listener semántico (`Escucha`) → visitor de CI (`GeneradorCodigoIntermedio`) → optimizador (`Optimizador`) → backend NASM (`GeneradorAssembler`) → archivos en `salida/`.
-- **Fases de compilación**: léxico, sintáctico, semántico, CI, optimización, backend (ver resumen más abajo).
-- **Decisiones de diseño**:
-    - Backend x86 32 bits con convención cdecl simple (prólogo/epílogo `ebp`), retorno en `eax` o `st0` (double vía x87).
-    - Soporte de `double` implementado con x87; constantes en `.data`, variables en `.bss`.
-    - CI de llamadas empaqueta argumentos en string; el backend evalúa tipos en el árbol (no desde CI).
-    - Optimizador con liveness completo para eliminar asignaciones muertas (incluye no temporales), además de const-prop, folding y CSE.
+- **Fases de compilación**: léxico, sintáctico, semántico, código intermedio, optimización y generación de código (resumidas también en el anexo).
+
+### Decisiones de diseño principales
+
+- **Uso de ANTLR4 con listener + visitor**: se eligió ANTLR4 para concentrar el esfuerzo en las fases altas (semántica, CI, optimización, backend) en lugar de escribir a mano el parser. Se usa el patrón *listener* (`Escucha`) para el análisis semántico (más natural para construir/actualizar la tabla de símbolos a medida que se recorren reglas) y el patrón *visitor* (`GeneradorCodigoIntermedio`) para generar código de tres direcciones de forma controlada y expresiva.
+
+- **Representación intermedia en tres direcciones**: en lugar de emitir ensamblador directamente desde el árbol, se introdujo un nivel de código intermedio con temporales (`tN`) y etiquetas (`lN`). Esto permite:
+    - Simplificar la implementación de optimizaciones (propagación de constantes, folding, CSE, liveness).
+    - Separar preocupaciones: primero se garantiza corrección semántica y estructural; luego se mejora el código y, recién al final, se decide cómo mapearlo a x86.
+
+- **Backend x86 de 32 bits y x87 para `double`**: se optó por un backend NASM de 32 bits con convención cdecl simple (prólogo/epílogo basado en `ebp`, retorno en `eax` para `int/char` y en `st0` para `double`). El uso de la FPU x87 para `double` se eligió porque:
+    - Simplifica la manipulación de `double` comparado con SSE en este contexto educativo.
+    - Permite implementar operaciones aritméticas en punto flotante con un conjunto reducido de instrucciones (`fld`, `fstp`, `fadd`, etc.).
+  Las constantes de punto flotante se ubican en `.data` y las variables en `.bss`, siguiendo la separación estándar de secciones.
+
+- **Tipado de llamadas y separación CI/backend**: el código intermedio mantiene las llamadas con una notación de argumentos “compacta” (como string), mientras que el backend consulta la tabla de símbolos y el árbol para conocer los tipos reales de los parámetros y de retorno. Esta separación se tomó para no sobrecargar la representación intermedia con detalles de bajo nivel (tamaños en bytes, registros concretos), manteniendo:
+    - El CI relativamente independiente de la arquitectura destino.
+    - La lógica de tamaños y convenciones de llamada encapsulada en `GeneradorAssembler`.
+
+- **Optimización basada en CFG y liveness completo**: se decidió implementar optimizaciones sobre el CI construyendo un grafo de flujo de control (CFG) explícito. Esto permite:
+    - Aplicar propagación de constantes y folding teniendo en cuenta el orden real de ejecución.
+    - Implementar eliminación de subexpresiones comunes por bloque.
+    - Aplicar un análisis de vida (*liveness*) que distinga variables vivas y muertas tanto para temporales como para no temporales, reduciendo código muerto sin alterar el comportamiento del programa.
+
+- **Subconjunto de C++ estrictamente acotado**: se restringió el lenguaje a tipos básicos (`int`, `char`, `double`, `void`) y estructuras de control esenciales (`if/else`, `while`, `for`, `break`, `continue`) más funciones y expresiones aritméticas/lógicas. Esta decisión se tomó para:
+    - Mantener el foco en las fases del compilador, no en la complejidad del lenguaje completo.
+    - Poder construir una implementación completa (con optimizaciones y backend) dentro de los tiempos de la materia.
+
+- **Sistema de reporte unificado**: se centralizó la emisión de mensajes en `Reportador`, que aplica colores y niveles (info/warning/error). Esto unifica la salida de las distintas fases y facilita tanto la depuración como la experiencia de usuario en consola.
 
 ## Implementación
 - **Detalles técnicos**: Java 17, Maven; ANTLR4 plugin genera lexer/parser en `target/generated-sources/antlr4/` (no editar). `Reportador` centraliza mensajes coloreados.
@@ -247,9 +272,11 @@ void testContinue() {
 - **Análisis**: `programa.txt` compila sin errores y genera ASM coherente con operaciones int/double y control de flujo; `programa_errores.txt` reporta dobles declaraciones, no declarados, no inicializados y firmas incompatibles.
 
 ## Dificultades Encontradas y Soluciones Aplicadas
-- Manejo de `double`: se resolvió con x87, constantes en `.data` y conversión int→double en retornos/asignaciones.
-- Tipado de llamadas: el CI conserva args como string; el backend evalúa tipos desde el árbol para empujar 4/8 bytes.
-- Liveness: se implementó un CFG con etiquetas/if/goto para evitar eliminar asignaciones necesarias en no temporales.
+- **Integración incremental de fases**: al principio el compilador solo hacía análisis léxico/sintáctico; al agregar semántica, CI, optimización y backend aparecieron inconsistencias entre fases (por ejemplo, cambios en la gramática que rompían generación de CI o ensamblador). Se resolvió estabilizando un flujo claro de etapas y usando archivos intermedios en `salida/` para depurar cada fase por separado.
+- **Manejo de `double` y x87**: el backend original solo contemplaba enteros. Añadir `double` implicó definir layout en `.data`, decidir convención de retorno (`st0`) y cuándo convertir entre `int` y `double`. Se resolvió usando instrucciones x87 (`fld`, `fstp`, operaciones aritméticas) y reglas explícitas de conversión en retornos/asignaciones.
+- **Tipado de llamadas y paso de parámetros**: el CI representa llamadas con argumentos en un string, lo que generó dificultades para decidir en el backend cuántos bytes empujar y cómo tratar `double`. La solución fue que el backend recupere tipos directamente del árbol/tabla de símbolos, respetando firmas de función y tamaños (4/8 bytes).
+- **Liveness y eliminación de código muerto**: la primera versión de la optimización podía eliminar asignaciones aún necesarias, especialmente sobre variables no temporales. Se rediseñó el análisis de vida construyendo un CFG basado en etiquetas/if/goto y propagando conjuntos IN/OUT hasta alcanzar un punto fijo, dejando fuera de la eliminación aquellas escrituras que todavía se usan más adelante.
+- **Sincronización entre gramática y semántica**: al extender el subconjunto de C++ (por ejemplo, con `for`, `break`, `continue` y operadores lógicos), fue necesario ajustar tanto la gramática como `Escucha`, el CI y el backend. Una parte del trabajo consistió en mantener estos componentes alineados, agregando casos faltantes y corrigiendo reportes de error para que fueran consistentes.
 
 ## Conclusiones
 Se completó un pipeline funcional de compilación para un subconjunto de C++: lexer/parser ANTLR, semántica con tabla de símbolos, CI, optimización y backend NASM con soporte de `double`. Quedan como mejoras posibles: tipado más estricto en llamadas/expresiones en CI, generación de temporales por argumento, y optimizaciones adicionales de bucles.
@@ -259,12 +286,60 @@ Se completó un pipeline funcional de compilación para un subconjunto de C++: l
 - Dick Grune et al. *Modern Compiler Design* (para referencia complementaria).
 - Alfred V. Aho, Jeffrey D. Ullman. *Construcción de Compiladores*.
 
-## Anexo (notas y comandos útiles)
-- **Instrucciones de uso**:
-    - Compilar y regenerar parser: `mvn clean compile`.
-    - Ejecutar compilador con entrada por defecto: `mvn -q exec:java "-Dexec.mainClass=compiladores.App" "-Dexec.args=entrada/programa.txt"`.
-    - Cambiar archivo de entrada: sustituir la ruta en `-Dexec.args` por cualquier archivo en `entrada/`.
-    - Ensamblar/ejecutar en Linux: `nasm -f elf32 salida/programa.asm -o salida/programa.o && ld -m elf_i386 salida/programa.o -o salida/programa`.
+## Anexo
+
+### Manual de Usuario
+
+#### Requisitos e instalación
+- Java 17 instalado y disponible en la variable `PATH`.
+- Maven instalado (el proyecto incluye `pom.xml`).
+- Clonar o descargar el repositorio y ubicarse en la carpeta raíz del proyecto.
+
+Para compilar el proyecto y generar el lexer/parser de ANTLR4:
+
+```powershell
+mvn clean compile
+```
+
+#### Ejecución básica del compilador
+Desde la raíz del proyecto, para compilar un programa de ejemplo:
+
+```powershell
+mvn -q exec:java "-Dexec.mainClass=compiladores.App" "-Dexec.args=entrada/programa.txt"
+```
+
+- El argumento en `-Dexec.args` es la ruta al archivo fuente en el subconjunto de C++.
+- Puedes reemplazar `entrada/programa.txt` por cualquier otro archivo dentro de `entrada/` (por ejemplo, `entrada/programa_errores.txt`, `entrada/test_if_else.txt`, etc.).
+
+#### Archivos de salida generados
+Tras una ejecución exitosa, el compilador produce:
+- `salida/codigo_intermedio.txt`: código de tres direcciones generado por `GeneradorCodigoIntermedio`.
+- `salida/codigo_optimizado.txt`: versión optimizada por `Optimizador` (const-prop, folding, CSE, liveness).
+- `salida/programa.asm`: código ensamblador NASM x86 generado por `GeneradorAssembler`.
+
+Para ensamblar y enlazar el archivo ASM en un entorno Linux de 32 bits:
+
+```bash
+nasm -f elf32 salida/programa.asm -o salida/programa.o
+ld -m elf_i386 salida/programa.o -o salida/programa
+./salida/programa
+```
+
+#### Interpretación de mensajes, errores y warnings
+El componente `Reportador` centraliza los mensajes del compilador y utiliza colores para diferenciarlos:
+- Verde: mensajes de éxito o información (por ejemplo, compilación completada, rutas de salida generadas).
+- Amarillo: *warnings* (situaciones no críticas pero potencialmente problemáticas, como código inalcanzable o conversiones implícitas sospechosas).
+- Rojo: errores léxicos, sintácticos o semánticos que impiden continuar la compilación.
+
+Cada mensaje incluye, cuando aplica, número de línea y columna del token correspondiente, lo que permite localizar rápidamente el problema en el archivo fuente.
+
+#### Buenas prácticas de uso
+- Editar únicamente los archivos en `src/main/antlr4` y `src/main/java`; nunca modificar archivos generados bajo `target/`.
+- Tras cambiar la gramática `compiladores.g4`, volver a ejecutar `mvn clean compile` para regenerar lexer/parser.
+- Mantener los programas de prueba dentro de `entrada/` para facilitar su compilación desde la línea de comandos.
+
+### Notas técnicas ampliadas
+
 - **Arquitectura y flujo (detalle)**:
     - Gramática ANTLR4 en `src/main/antlr4/compiladores/compiladores.g4` → genera `compiladoresLexer`/`Parser` en `target/generated-sources/antlr4/`.
     - Listener semántico `Escucha` valida ámbitos, tipos y firmas; usa `TablaSimbolos` (singleton con pila de contextos).
@@ -294,8 +369,8 @@ _start:
         pop ebx
         add eax, ebx
         mov [z], eax
-```
-- **Resumen de las 6 fases**:
+    ```
+    - **Resumen de las 6 fases**:
     - 1) Léxico: `compiladoresLexer` tokeniza y detecta caracteres inválidos.
     - 2) Sintáctico: `compiladoresParser` valida la estructura y construye el parse tree.
     - 3) Semántico: `Escucha` verifica tipos, ámbitos, inicialización y firmas; llena la tabla de símbolos.

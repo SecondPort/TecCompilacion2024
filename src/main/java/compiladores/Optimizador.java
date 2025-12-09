@@ -244,6 +244,10 @@ public class Optimizador {
         return true;
     }
 
+    /**
+     * Devuelve true si la instrucción es una asignación pura sin efectos secundarios.
+     * Las operaciones de control de flujo y llamadas se excluyen para no eliminarlas.
+     */
     private boolean instruccionPura(Instruccion inst) {
         String op = inst.op;
         if (op == null) return false;
@@ -256,6 +260,9 @@ public class Optimizador {
         return true;
     }
 
+    /**
+     * Calcula el conjunto OUT de un nodo usando sus sucesores en el CFG (lineal y con saltos).
+     */
     private java.util.Set<String> calcularSucesoresOut(List<java.util.Set<String>> in,
                                                        Map<String, Integer> etiquetas,
                                                        int indice,
