@@ -130,6 +130,8 @@ public class Escucha extends compiladoresBaseListener {
                 return origen == TipoDato.CHAR || origen == TipoDato.BOOL;
             case BOOL:
                 return origen == TipoDato.BOOL || origen == TipoDato.CHAR || origen == TipoDato.INT;
+            case CHAR:
+                return origen == TipoDato.CHAR || origen == TipoDato.INT || origen == TipoDato.BOOL;
             default:
                 return false;
         }
