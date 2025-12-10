@@ -286,6 +286,24 @@ public final class TablaSimbolos {
             consumidor.accept(id);
         }
     }
+
+    /**
+     * Imprime la tabla de símbolos acumulada durante la compilación.
+     * Incluye nombre, tipo, categoría, posición y ámbito.
+     */
+    public void imprimirTablaSimbolos() {
+        System.out.println("\n--- Tabla de simbolos ---");
+        System.out.printf("%-15s %-8s %-12s %-6s %-8s %-10s %s%n", "Nombre", "Tipo", "Categoria", "Linea", "Columna", "Ambito", "Detalles");
+        for (Id id : historial) {
+            String tipo = id.getTipoDato() != null ? id.getTipoDato().name().toLowerCase() : "-";
+            String categoria = id.getCategoria() != null ? id.getCategoria() : (id instanceof Funcion ? "funcion" : "variable");
+            String ambito = id.getAmbito() != null ? id.getAmbito() : "global";
+            String detalles = id.getDetalles() != null ? id.getDetalles() : "";
+            System.out.printf("%-15s %-8s %-12s %-6d %-8d %-10s %s%n",
+                    id.getNombre(), tipo, categoria, id.getLinea(), id.getColumna(), ambito, detalles);
+        }
+        System.out.println("--- Fin tabla de simbolos ---\n");
+    }
 }
 
 /**
@@ -330,6 +348,19 @@ abstract class Id {
      * Permite detectar variables o funciones declaradas pero nunca usadas.
      */
     private Boolean usado;
+
+    /** Línea y columna donde se declaró el símbolo. */
+    private int linea = -1;
+    private int columna = -1;
+
+    /** Categoría del símbolo (variable, funcion, parametro, prototipo, etc.). */
+    private String categoria;
+
+    /** Ámbito textual (global, local, parametros, etc.). */
+    private String ambito;
+
+    /** Detalles adicionales como firma de función o banderas de estado. */
+    private String detalles;
 
     /**
      * Obtiene el nombre del identificador.
@@ -419,6 +450,46 @@ abstract class Id {
      */
     public void setUsado(Boolean usado) {
         this.usado = usado;
+    }
+
+    public int getLinea() {
+        return linea;
+    }
+
+    public void setLinea(int linea) {
+        this.linea = linea;
+    }
+
+    public int getColumna() {
+        return columna;
+    }
+
+    public void setColumna(int columna) {
+        this.columna = columna;
+    }
+
+    public String getCategoria() {
+        return categoria;
+    }
+
+    public void setCategoria(String categoria) {
+        this.categoria = categoria;
+    }
+
+    public String getAmbito() {
+        return ambito;
+    }
+
+    public void setAmbito(String ambito) {
+        this.ambito = ambito;
+    }
+
+    public String getDetalles() {
+        return detalles;
+    }
+
+    public void setDetalles(String detalles) {
+        this.detalles = detalles;
     }
 }
 

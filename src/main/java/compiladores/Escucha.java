@@ -27,6 +27,7 @@ import compiladores.compiladoresParser.IreturnContext;
 import compiladores.compiladoresParser.ProgramaContext;
 import compiladores.compiladoresParser.PrototipofuncContext;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Implementación del patrón Listener de ANTLR4 para análisis semántico del compilador.
@@ -142,6 +143,35 @@ public class Escucha extends compiladoresBaseListener {
         return TipoDato.INT;
     }
 
+    private String toLexema(TipoDato tipo) {
+        if (tipo == null) {
+            return "-";
+        }
+        switch (tipo) {
+            case INT: return "int";
+            case DOUBLE: return "double";
+            case CHAR: return "char";
+            case BOOL: return "bool";
+            case VOID: return "void";
+            default: return tipo.toString().toLowerCase();
+        }
+    }
+
+    private String formatearFirma(java.util.List<TipoDato> tiposArgs) {
+        if (tiposArgs == null || tiposArgs.isEmpty()) {
+            return "()";
+        }
+        return "(" + tiposArgs.stream().map(this::toLexema).collect(Collectors.joining(", ")) + ")";
+    }
+
+    private String detalleFuncion(TipoDato retorno, java.util.List<TipoDato> firma, String etiqueta) {
+        String detalle = "retorno=" + toLexema(retorno) + " args=" + formatearFirma(firma);
+        if (etiqueta != null && !etiqueta.isEmpty()) {
+            detalle += " " + etiqueta;
+        }
+        return detalle;
+    }
+
     /** Infere tipo para literales booleanos. */
     private TipoDato tipoBooleano(String lexema) {
         if (lexema == null) return null;
@@ -187,15 +217,19 @@ public class Escucha extends compiladoresBaseListener {
                 return; // No advertimos sobre funciones/prototipos.
             }
             String nombre = id.getNombre();
+            int linea = id.getLinea() >= 0 ? id.getLinea() : ctx.getStop().getLine();
+            int columna = id.getColumna() >= 0 ? id.getColumna() : ctx.getStop().getCharPositionInLine();
             if (Boolean.FALSE.equals(id.getUsado())) {
                 reportador.warning("Identificador declarado pero no usado: " + nombre,
-                        ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
+                        linea, columna);
             }
             if (Boolean.FALSE.equals(id.getInicializado())) {
                 reportador.warning("Identificador declarado pero no inicializado: " + nombre,
-                        ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
+                        linea, columna);
             }
         });
+
+        tabla.imprimirTablaSimbolos();
 
         reportador.info("Fin de la compilacion", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
         reportador.info("Se visitaron " + nodos + " nodos", ctx.getStop().getLine(), ctx.getStop().getCharPositionInLine());
@@ -282,6 +316,11 @@ public class Escucha extends compiladoresBaseListener {
                 f.setInicializado(true);
                 f.setUsado(false);
                 f.setArgumentos(extraerTiposParametros(ctx.idfunc()));
+                f.setLinea(ctx.getStart().getLine());
+                f.setColumna(ctx.getStart().getCharPositionInLine());
+                f.setCategoria("funcion");
+                f.setAmbito("global");
+                f.setDetalles(detalleFuncion(tipoFuncionActual, f.getArgumentos(), "definicion"));
                 tabla.addSimboloGlobal(nombreFunc, f);
             }
         }
@@ -410,6 +449,11 @@ public class Escucha extends compiladoresBaseListener {
         param.setTipoDato(tipo);
         param.setInicializado(true); // parámetros se consideran inicializados
         param.setUsado(false);
+        param.setLinea(linea);
+        param.setColumna(columna);
+        param.setCategoria("parametro");
+        param.setAmbito("parametros");
+        param.setDetalles("parametro de funcion");
         tabla.addSimbolo(nombre, param);
     }
 
@@ -526,6 +570,12 @@ public class Escucha extends compiladoresBaseListener {
             nuevaVariable.setTipoDato(tipo);
             // En C las variables globales se consideran inicializadas en cero
             nuevaVariable.setInicializado(esGlobal || hayInicializacion);
+            nuevaVariable.setUsado(false);
+            nuevaVariable.setLinea(ctx.getStart().getLine());
+            nuevaVariable.setColumna(ctx.getStart().getCharPositionInLine());
+            nuevaVariable.setCategoria("variable");
+            nuevaVariable.setAmbito(esGlobal ? "global" : "local");
+            nuevaVariable.setDetalles("inicializado=" + (esGlobal || hayInicializacion));
             tabla.addSimbolo(nombre, nuevaVariable);
         } else {
             reportador.error("Error semantico: Doble declaracion del mismo identificador", ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
@@ -569,6 +619,11 @@ public class Escucha extends compiladoresBaseListener {
             nuevaFuncion.setUsado(false);
             nuevaFuncion.setInicializado(true);
             nuevaFuncion.setArgumentos(firma);
+            nuevaFuncion.setLinea(ctx.getStart().getLine());
+            nuevaFuncion.setColumna(ctx.getStart().getCharPositionInLine());
+            nuevaFuncion.setCategoria("prototipo");
+            nuevaFuncion.setAmbito("global");
+            nuevaFuncion.setDetalles(detalleFuncion(tipoRetorno, firma, "prototipo"));
             tabla.addSimboloGlobal(nombre, nuevaFuncion);
         } else if (existente instanceof Funcion) {
             // Si ya hay una función con el mismo nombre, verificamos compatibilidad básica de tipo
@@ -667,6 +722,11 @@ public class Escucha extends compiladoresBaseListener {
                 nuevaFuncion.setUsado(false);
                 nuevaFuncion.setInicializado(true);
                 nuevaFuncion.setArgumentos(firma);
+                nuevaFuncion.setLinea(ctx.getStart().getLine());
+                nuevaFuncion.setColumna(ctx.getStart().getCharPositionInLine());
+                nuevaFuncion.setCategoria("funcion");
+                nuevaFuncion.setAmbito("global");
+                nuevaFuncion.setDetalles(detalleFuncion(tipoRetorno, firma, "definicion"));
                 tabla.addSimboloGlobal(nombre, nuevaFuncion);
             } else if (existente instanceof Funcion) {
                 // Ya había un prototipo; verificamos que el tipo sea compatible
