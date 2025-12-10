@@ -1,9 +1,0 @@
-int contador = 0;
-int limite = 10;
-int suma = 0;
-
-while (contador < limite) {
-    suma = suma + contador;
-    contador = contador + 1;
-}
-
