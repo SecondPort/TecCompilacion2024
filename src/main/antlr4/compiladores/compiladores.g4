@@ -94,18 +94,20 @@ listaid : COMA ID dimension? inicializacion listaid
 
 asignacion : ID dimensionAcceso? ASIGN expresion PYC ;
 
+// Precedencia (de mayor a menor en este orden de alternativas con recursión izquierda):
+// multiplicativos > suma/resta > relacionales > igualdad > AND > OR.
 expresion
-	: expresion SUMA expresion
-	| expresion RESTA expresion
-	| expresion MULT expresion
+	: expresion MULT expresion
 	| expresion DIV expresion
 	| expresion MOD expresion
-	| expresion EQ expresion
-	| expresion UEQ expresion
+	| expresion SUMA expresion
+	| expresion RESTA expresion
 	| expresion MAYOR expresion
 	| expresion MENOR expresion
 	| expresion MAYORIGUAL expresion
 	| expresion MENORIGUAL expresion
+	| expresion EQ expresion
+	| expresion UEQ expresion
 	| expresion AND expresion
 	| expresion OR expresion
 	| RESTA expresion           // unario -
