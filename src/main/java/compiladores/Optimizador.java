@@ -34,8 +34,10 @@ public class Optimizador {
         }
 
         boolean cambios = true;
-        
+
         while (cambios) {
+            // Primero limpia código inalcanzable generado por saltos incondicionales previos.
+            eliminarInalcanzable(optimizadas);
             cambios = false;
             Map<String, String> constantes = new HashMap<>();
             Map<String, String> expresiones = new HashMap<>(); // Key: "op,arg1,arg2", Value: resultTemp
@@ -54,6 +56,14 @@ public class Optimizador {
                 String arg1 = inst.arg1;
                 String arg2 = inst.arg2;
                 String result = inst.result;
+
+                // 0. Eliminar asignaciones redundantes del tipo x = x;
+                if ("=".equals(op) && result != null && result.equals(arg1)) {
+                    optimizadas.remove(i);
+                    i--; // stay at current index after removal
+                    cambios = true;
+                    continue;
+                }
                 
                 // 1. Propagación de Constantes
                 boolean localChange = false;
@@ -128,6 +138,37 @@ public class Optimizador {
         // Pasada final: eliminación de código muerto sobre la lista ya optimizada
         eliminarCodigoMuerto(optimizadas);
         return optimizadas;
+    }
+
+    /**
+     * Elimina instrucciones que son inalcanzables debido a un salto incondicional previo
+     * (goto) hasta la siguiente etiqueta. Mantiene etiquetas y saltos para no romper el CFG.
+     */
+    private void eliminarInalcanzable(List<Instruccion> instrucciones) {
+        boolean cambio = true;
+        while (cambio) {
+            cambio = false;
+            List<Instruccion> resultado = new ArrayList<>();
+            boolean enZonaMuerta = false;
+            for (Instruccion inst : instrucciones) {
+                if ("label".equals(inst.op)) {
+                    enZonaMuerta = false;
+                    resultado.add(inst);
+                    continue;
+                }
+                if (enZonaMuerta) {
+                    // Saltar cualquier instrucción no esencial
+                    cambio = true;
+                    continue;
+                }
+                resultado.add(inst);
+                if ("goto".equals(inst.op) || "return".equals(inst.op)) {
+                    enZonaMuerta = true;
+                }
+            }
+            instrucciones.clear();
+            instrucciones.addAll(resultado);
+        }
     }
 
     /**

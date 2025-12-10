@@ -60,7 +60,7 @@ La solución se estructuró siguiendo el pipeline clásico de compilación, pero
     - CI: `GeneradorCodigoIntermedio` emite tres direcciones (temporales `tN`, etiquetas `lN`) para expresiones, control y llamadas.
     - Optimización: `Optimizador` aplica propagación de constantes, constant folding, CSE intra-bloque, y eliminación de código muerto vía liveness (CFG con etiquetas/if/goto).
     - Backend: `GeneradorAssembler` visita el árbol con tipado simple (`int/char/double`), evalúa factores/expresiones, maneja llamadas, convierte int→double en retornos cuando es necesario y emite NASM.
-- **Técnicas de optimización implementadas**: propagación de constantes, constant folding, eliminación de subexpresiones comunes, liveness completo para eliminar asignaciones no usadas (temporales y no temporales).
+- **Técnicas de optimización implementadas**: propagación de constantes, constant folding, eliminación de subexpresiones comunes, eliminación de código inalcanzable tras `goto` y `return`, eliminación de asignaciones redundantes del tipo `x = x;` y liveness completo para eliminar asignaciones no usadas (temporales y no temporales).
 
 ## Ejemplos y Pruebas
 - **Casos**: `entrada/programa.txt` (flujo completo sin errores), `entrada/programa_errores.txt` (muestra reportes semánticos). Hay más ejemplos en `entrada/` (if/else, while, for, aritmética).
@@ -344,7 +344,7 @@ Cada mensaje incluye, cuando aplica, número de línea y columna del token corre
     - Gramática ANTLR4 en `src/main/antlr4/compiladores/compiladores.g4` → genera `compiladoresLexer`/`Parser` en `target/generated-sources/antlr4/`.
     - Listener semántico `Escucha` valida ámbitos, tipos y firmas; usa `TablaSimbolos` (singleton con pila de contextos).
     - Visitor `GeneradorCodigoIntermedio` emite tres direcciones (temporales `tN`, etiquetas `lN`) hacia `salida/codigo_intermedio.txt`.
-    - `Optimizador` aplica const-prop, folding, CSE y liveness para `salida/codigo_optimizado.txt`.
+    - `Optimizador` aplica propagación de constantes, constant folding, eliminación de subexpresiones comunes, eliminación de código inalcanzable después de `goto` y `return`, eliminación de asignaciones redundantes `x = x;` y liveness para eliminar código muerto en `salida/codigo_optimizado.txt`.
     - Backend `GeneradorAssembler` produce NASM x86 con soporte `int/char/double` (x87) en `salida/programa.asm`.
 - **Convenciones y guías rápidas**:
     - No editar archivos generados en `target/`.
