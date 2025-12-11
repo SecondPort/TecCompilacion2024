@@ -1,16 +1,16 @@
 # Compilador de subconjunto C
 
 ## Portada
-- **Título**: Compilador de subconjunto C++
+- **Título**: Compilador de subconjunto C
 - **Integrantes**: Lucas Manuel Moyano Gómez, Ignacio Jesús Olariaga Oliveto
 - **Materia**: Técnicas de Compilación
 - **Profesores**: Maximiliano Andrés Eschoyez, Francisco Ameri Lopez Lozano
 - **Fecha**: 11/12/2025
 
 ## Introducción
-Compilador académico construido con ANTLR4 (v4.13.1) y Java 17 para un subconjunto de C++ procedimental. Implementa análisis léxico, sintáctico, semántico, generación de código intermedio, optimización y backend NASM x86. Objetivos: ejercitar el pipeline completo de compilación, soportar tipos básicos (int, char, double), control de flujo y funciones con llamadas anidadas.
+Compilador académico construido con ANTLR4 (v4.13.1) y Java 17 para un subconjunto de C procedimental. Implementa análisis léxico, sintáctico, semántico, generación de código intermedio, optimización y backend NASM x86. Objetivos: ejercitar el pipeline completo de compilación, soportar tipos básicos (int, char, double), control de flujo y funciones con llamadas anidadas.
 
-## Análisis del Problema (subconjunto de C++)
+## Análisis del Problema (subconjunto de C)
 - Tipos: `int`, `char`, `double`, `void`.
 - Estructuras: declaraciones, asignaciones, expresiones aritméticas/lógicas, `if/else`, `while`, `for`, `break`, `continue`, `return`.
 - Funciones: prototipos y definiciones; llamadas con argumentos por valor; retornos `int/char/double/void`.
@@ -44,7 +44,7 @@ La solución se estructuró siguiendo el pipeline clásico de compilación, pero
     - Implementar eliminación de subexpresiones comunes por bloque.
     - Aplicar un análisis de vida (*liveness*) que distinga variables vivas y muertas tanto para temporales como para no temporales, reduciendo código muerto sin alterar el comportamiento del programa.
 
-- **Subconjunto de C++ estrictamente acotado**: se restringió el lenguaje a tipos básicos (`int`, `char`, `double`, `void`) y estructuras de control esenciales (`if/else`, `while`, `for`, `break`, `continue`) más funciones y expresiones aritméticas/lógicas. Esta decisión se tomó para:
+- **Subconjunto de C estrictamente acotado**: se restringió el lenguaje a tipos básicos (`int`, `char`, `double`, `void`) y estructuras de control esenciales (`if/else`, `while`, `for`, `break`, `continue`) más funciones y expresiones aritméticas/lógicas. Esta decisión se tomó para:
     - Mantener el foco en las fases del compilador, no en la complejidad del lenguaje completo.
     - Poder construir una implementación completa (con optimizaciones y backend) dentro de los tiempos de la materia.
 
@@ -276,10 +276,10 @@ void testContinue() {
 - **Manejo de `double` y x87**: el backend original solo contemplaba enteros. Añadir `double` implicó definir layout en `.data`, decidir convención de retorno (`st0`) y cuándo convertir entre `int` y `double`. Se resolvió usando instrucciones x87 (`fld`, `fstp`, operaciones aritméticas) y reglas explícitas de conversión en retornos/asignaciones.
 - **Tipado de llamadas y paso de parámetros**: el CI representa llamadas con argumentos en un string, lo que generó dificultades para decidir en el backend cuántos bytes empujar y cómo tratar `double`. La solución fue que el backend recupere tipos directamente del árbol/tabla de símbolos, respetando firmas de función y tamaños (4/8 bytes).
 - **Liveness y eliminación de código muerto**: la primera versión de la optimización podía eliminar asignaciones aún necesarias, especialmente sobre variables no temporales. Se rediseñó el análisis de vida construyendo un CFG basado en etiquetas/if/goto y propagando conjuntos IN/OUT hasta alcanzar un punto fijo, dejando fuera de la eliminación aquellas escrituras que todavía se usan más adelante.
-- **Sincronización entre gramática y semántica**: al extender el subconjunto de C++ (por ejemplo, con `for`, `break`, `continue` y operadores lógicos), fue necesario ajustar tanto la gramática como `Escucha`, el CI y el backend. Una parte del trabajo consistió en mantener estos componentes alineados, agregando casos faltantes y corrigiendo reportes de error para que fueran consistentes.
+- **Sincronización entre gramática y semántica**: al extender el subconjunto de C (por ejemplo, con `for`, `break`, `continue` y operadores lógicos), fue necesario ajustar tanto la gramática como `Escucha`, el CI y el backend. Una parte del trabajo consistió en mantener estos componentes alineados, agregando casos faltantes y corrigiendo reportes de error para que fueran consistentes.
 
 ## Conclusiones
-Se completó un pipeline funcional de compilación para un subconjunto de C++: lexer/parser ANTLR, semántica con tabla de símbolos, CI, optimización y backend NASM con soporte de `double`. Quedan como mejoras posibles: tipado más estricto en llamadas/expresiones en CI, generación de temporales por argumento, y optimizaciones adicionales de bucles.
+Se completó un pipeline funcional de compilación para un subconjunto de C: lexer/parser ANTLR, semántica con tabla de símbolos, CI, optimización y backend NASM con soporte de `double`. Quedan como mejoras posibles: tipado más estricto en llamadas/expresiones en CI, generación de temporales por argumento, y optimizaciones adicionales de bucles.
 
 ## Referencias Bibliográficas
 - Aho, Lam, Sethi, Ullman. *Compilers: Principles, Techniques, and Tools*.
@@ -308,7 +308,7 @@ Desde la raíz del proyecto, para compilar un programa de ejemplo:
 mvn -q exec:java "-Dexec.mainClass=compiladores.App" "-Dexec.args=entrada/programa.txt"
 ```
 
-- El argumento en `-Dexec.args` es la ruta al archivo fuente en el subconjunto de C++.
+- El argumento en `-Dexec.args` es la ruta al archivo fuente en el subconjunto de C.
 - Puedes reemplazar `entrada/programa.txt` por cualquier otro archivo dentro de `entrada/` (por ejemplo, `entrada/programa_errores.txt`, `entrada/test_if_else.txt`, etc.).
 
 #### Archivos de salida generados
